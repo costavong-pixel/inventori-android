@@ -869,15 +869,15 @@ class MainActivity : Activity() {
         private const val REQUEST_RECEIPT = 1005
         private const val REQUEST_DOCUMENT = 1006
         private const val REQUEST_EXPORT_PDF = 1007
-        private const val COLOR_BACKGROUND = 0xFFF6F7F2.toInt()
-        private const val COLOR_WHITE = 0xFFFFFFFF.toInt()
-        private const val COLOR_INK = 0xFF192521.toInt()
-        private const val COLOR_MUTED = 0xFF66736D.toInt()
-        private const val COLOR_GREEN = 0xFF1E6B5B.toInt()
-        private const val COLOR_BORDER = 0xFFE1E7E2.toInt()
-        private const val COLOR_BUTTON = 0xFFE9EFEB.toInt()
-        private const val NUMBER_INPUT = android.text.InputType.TYPE_CLASS_NUMBER
-        private const val DECIMAL_INPUT =
+        private val COLOR_BACKGROUND = 0xFFF6F7F2.toInt()
+        private val COLOR_WHITE = 0xFFFFFFFF.toInt()
+        private val COLOR_INK = 0xFF192521.toInt()
+        private val COLOR_MUTED = 0xFF66736D.toInt()
+        private val COLOR_GREEN = 0xFF1E6B5B.toInt()
+        private val COLOR_BORDER = 0xFFE1E7E2.toInt()
+        private val COLOR_BUTTON = 0xFFE9EFEB.toInt()
+        private val NUMBER_INPUT = android.text.InputType.TYPE_CLASS_NUMBER
+        private val DECIMAL_INPUT =
             android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
     }
 }
