@@ -221,7 +221,10 @@ class InventoryWorkflowInstrumentedTest {
 
     private fun createLocation(device: UiDevice, name: String, type: String?, parent: String?) {
         tapId(device, "locations_add_button")
-        device.findObject(By.res(packageName, "location_name_input")).setText(name)
+        val nameInput = device.wait(Until.findObject(By.res(packageName, "location_name_input")), 5_000)
+            ?: error("Location name field did not appear")
+        nameInput.setText(name)
+        device.pressBack()
         if (type != null) {
             device.findObject(By.res(packageName, "location_type_spinner")).click()
             tapText(device, type)

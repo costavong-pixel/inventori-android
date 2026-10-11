@@ -232,7 +232,7 @@ class MainActivity : Activity() {
         val body = screen("Locations", { showHome() })
         body.addView(label("Build a place tree that makes storage easy to find.", 15, COLOR_MUTED))
         body.addView(spacer(10))
-        body.addView(button("＋ Add location", R.id.locations_add_button, true) { showAddLocationDialog() }, matchWrap())
+        body.addView(button("＋ Add location", R.id.locations_add_button, true) { showAddLocationForm() }, matchWrap())
         body.addView(spacer(12))
         val locations = database.locations().sortedBy { database.locationPath(it.id).lowercase() }
         if (locations.isEmpty()) {
@@ -251,55 +251,37 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showAddLocationDialog() {
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(12), dp(22), dp(2))
-        }
-        val name = EditText(this).apply {
-            id = R.id.location_name_input
-            hint = "Location name (e.g. Home, Basement, Box 4)"
-            isSingleLine = true
-        }
-        box.addView(name, matchWrap())
-        box.addView(spacer(8))
-        box.addView(label("Type", 13, COLOR_MUTED, true))
+    private fun showAddLocationForm() {
+        val body = screen("New location", { showLocations() })
+        body.addView(label("Create a property or business, then add rooms, storage areas, shelves, and boxes.", 14, COLOR_MUTED))
+        body.addView(spacer(8))
+        val name = addField(body, "Location name", R.id.location_name_input, "Home, Basement, Shelf, Box 4", "")
+        body.addView(label("Type", 13, COLOR_MUTED, true))
         val typeNames = listOf("Property / business", "Room", "Storage area", "Shelf", "Box / bin", "Business location")
         val typeValues = listOf("property", "room", "storage", "shelf", "box", "business")
         val typeSpinner = spinner(typeNames).apply { id = R.id.location_type_spinner }
-        box.addView(typeSpinner, matchWrap())
-        box.addView(spacer(8))
-        box.addView(label("Inside", 13, COLOR_MUTED, true))
+        body.addView(typeSpinner, matchWrap())
+        body.addView(spacer(8))
+        body.addView(label("Inside", 13, COLOR_MUTED, true))
         val parents = listOf<InventoryLocation?>(null) + database.locations()
         val parentNames = listOf("No parent (top level)") + parents.drop(1).map {
             database.locationPath(it!!.id)
         }
         val parentSpinner = spinner(parentNames).apply { id = R.id.location_parent_spinner }
-        box.addView(parentSpinner, matchWrap())
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("New location")
-            .setView(box)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Create", null)
-            .create()
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).apply {
-                id = R.id.location_save_button
-                setOnClickListener {
-                val locationName = name.text.toString().trim()
-                if (locationName.isEmpty()) {
-                    name.error = "Enter a name"
-                    return@setOnClickListener
-                }
-                val type = typeValues[typeSpinner.selectedItemPosition]
-                val parent = parents[parentSpinner.selectedItemPosition]
-                database.addLocation(locationName, type, parent?.id)
-                dialog.dismiss()
-                showLocations()
-                }
+        body.addView(parentSpinner, matchWrap())
+        body.addView(spacer(14))
+        body.addView(button("Create location", R.id.location_save_button, true) {
+            val locationName = name.text.toString().trim()
+            if (locationName.isEmpty()) {
+                name.error = "Enter a name"
+                name.requestFocus()
+                return@button
             }
-        }
-        dialog.show()
+            val type = typeValues[typeSpinner.selectedItemPosition]
+            val parent = parents[parentSpinner.selectedItemPosition]
+            database.addLocation(locationName, type, parent?.id)
+            showLocations()
+        }, matchWrap())
     }
 
     private fun showItemForm(existing: InventoryItem?) {
@@ -492,8 +474,7 @@ class MainActivity : Activity() {
     private fun chooseAiInput(count: Int) {
         pendingAiCount = count
         AlertDialog.Builder(this)
-            .setTitle("AI item draft")
-            .setMessage("The V1 local mock demonstrates the confirmation flow. It does not send photos to an AI service.")
+            .setTitle("AI item draft · local mock")
             .setItems(arrayOf("Take a photo", "Choose from gallery", "Use mock sample")) { _, choice ->
                 when (choice) {
                     0 -> startCamera(REQUEST_AI_CAMERA)
