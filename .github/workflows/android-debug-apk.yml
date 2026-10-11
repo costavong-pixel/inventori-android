@@ -15,6 +15,7 @@ permissions:
 jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -29,12 +30,23 @@ jobs:
       - name: Build debug APK
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug testDebugUnitTest
+
+      - name: Run Android emulator workflow checks
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_7_pro
+          disable-animations: true
+          script: ./gradlew connectedDebugAndroidTest
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: inventori-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
