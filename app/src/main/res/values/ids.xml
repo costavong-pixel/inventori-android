@@ -6,6 +6,10 @@
     <item name="home_export_pdf" type="id" />
     <item name="home_search" type="id" />
     <item name="home_items" type="id" />
+    <item name="nav_inventory" type="id" />
+    <item name="nav_scan" type="id" />
+    <item name="nav_locations" type="id" />
+    <item name="nav_reports" type="id" />
     <item name="ai_one" type="id" />
     <item name="ai_multiple" type="id" />
     <item name="ai_mock_sample" type="id" />
