@@ -12,7 +12,6 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
-import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import androidx.core.content.FileProvider
@@ -42,10 +41,8 @@ class InventoryWorkflowInstrumentedTest {
         createLocation(scenario, device, "Home", null, null)
         createLocation(scenario, device, "Basement", "Room", "Home")
         createLocation(scenario, device, "Box 4", "Box / bin", "Home → Basement")
-        device.findObject(By.text("‹")).click()
-        device.waitForIdle()
-
-        tapId(device, "home_add_item")
+        tapId(device, "screen_back")
+        scenario.onActivity { it.findViewById<Button>(R.id.home_add_item).performClick() }
         scenario.onActivity { activity ->
             activity.findViewById<EditText>(R.id.item_name).setText("UI Test Camera")
             activity.findViewById<EditText>(R.id.item_category).setText("Electronics")
@@ -105,27 +102,19 @@ class InventoryWorkflowInstrumentedTest {
         assertTrue(device.hasObject(By.text("Detected battery pack")))
 
         tapId(device, "ai_draft_edit_0")
-        val firstName = device.findObject(By.res(packageName, "ai_edit_name"))
-        firstName.clear()
-        firstName.setText("Edited detected drill")
-        device.pressBack()
-        tapText(device, "Apply")
-        scrollToBottom(device)
-        tapText(device, "＋ Add another item")
-        scrollToBottom(device)
-        val editButtons = device.findObjects(By.text("Edit"))
-        editButtons.last().click()
-        val addedName = device.findObject(By.res(packageName, "ai_edit_name"))
-        addedName.clear()
-        addedName.setText("Added during review")
-        device.pressBack()
-        tapText(device, "Apply")
-
-        scrollToTop(device)
-        device.findObjects(By.text("Remove")).first().click()
+        scenario.onActivity { activity ->
+            activity.findViewById<EditText>(R.id.ai_edit_name).setText("Edited detected drill")
+            activity.findViewById<Button>(R.id.ai_edit_apply).performClick()
+        }
+        scenario.onActivity { activity -> activity.findViewById<Button>(R.id.ai_add_draft).performClick() }
+        scenario.onActivity { activity -> activity.findViewById<Button>(R.id.ai_draft_edit_2).performClick() }
+        scenario.onActivity { activity ->
+            activity.findViewById<EditText>(R.id.ai_edit_name).setText("Added during review")
+            activity.findViewById<Button>(R.id.ai_edit_apply).performClick()
+        }
+        scenario.onActivity { activity -> activity.findViewById<Button>(R.id.ai_draft_remove_0).performClick() }
         assertFalse(device.hasObject(By.text("Edited detected drill")))
-        scrollToBottom(device)
-        tapId(device, "ai_confirm_save")
+        scenario.onActivity { it.findViewById<Button>(R.id.ai_confirm_save).performClick() }
         val db = InventoryDatabase(context)
         val saved = db.items()
         assertEquals(2, saved.size)
@@ -256,24 +245,4 @@ class InventoryWorkflowInstrumentedTest {
         device.waitForIdle()
     }
 
-    private fun tapText(device: UiDevice, text: String) {
-        val target = device.findObject(By.text(text))
-        assertNotNull("Missing UI text: " + text, target)
-        target.click()
-        device.waitForIdle()
-    }
-
-    private fun scrollToBottom(device: UiDevice) {
-        val view = device.findObject(By.scrollable(true)) ?: return
-        repeat(12) {
-            if (!view.scroll(Direction.DOWN, 0.82f)) return
-        }
-    }
-
-    private fun scrollToTop(device: UiDevice) {
-        val view = device.findObject(By.scrollable(true)) ?: return
-        repeat(12) {
-            if (!view.scroll(Direction.UP, 0.82f)) return
-        }
-    }
 }

@@ -498,11 +498,18 @@ class MainActivity : Activity() {
             draft.addView(label(item.name.ifBlank { "Unnamed item" }, 17, COLOR_INK, true))
             draft.addView(label(listOf(item.category, item.brand, item.model).filter { it.isNotBlank() }.joinToString(" · "), 13, COLOR_MUTED))
             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.addView(button("Edit") {
+            val editId = when (index) {
+                0 -> R.id.ai_draft_edit_0
+                1 -> R.id.ai_draft_edit_1
+                2 -> R.id.ai_draft_edit_2
+                else -> View.generateViewId()
+            }
+            row.addView(button("Edit", editId) {
                 editDetectedItem(index)
-            }.apply { if (index == 0) id = R.id.ai_draft_edit_0 },
+            },
                 LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(5) })
-            row.addView(button("Remove") {
+            val removeId = if (index == 0) R.id.ai_draft_remove_0 else View.generateViewId()
+            row.addView(button("Remove", removeId) {
                 detectedItems.removeAt(index)
                 showAiConfirmation()
             }, LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginStart = dp(5) })
@@ -510,7 +517,7 @@ class MainActivity : Activity() {
             body.addView(draft, matchWrap())
             body.addView(spacer(6))
         }
-        body.addView(button("＋ Add another item") {
+        body.addView(button("＋ Add another item", R.id.ai_add_draft) {
             detectedItems.add(InventoryItem(name = "", category = "", photoPath = detectedItems.firstOrNull()?.photoPath))
             showAiConfirmation()
         }, matchWrap())
@@ -532,41 +539,35 @@ class MainActivity : Activity() {
 
     private fun editDetectedItem(index: Int) {
         val item = detectedItems.getOrNull(index) ?: return
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), 0) }
-        fun dialogField(hint: String, value: String, viewId: Int): EditText = EditText(this).apply {
-            id = viewId
-            this.hint = hint
-            setText(value)
-            isSingleLine = true
-        }.also { box.addView(it, matchWrap()) }
-        val name = dialogField("Name", item.name, R.id.ai_edit_name)
-        val category = dialogField("Category", item.category, R.id.ai_edit_category)
-        val brand = dialogField("Brand", item.brand, R.id.ai_edit_brand)
-        val model = dialogField("Model", item.model, R.id.ai_edit_model)
-        val serial = dialogField("Serial number", item.serialNumber, R.id.ai_edit_serial)
-        val quantity = dialogField("Quantity", item.quantity.toString(), R.id.ai_edit_quantity)
-        val purchase = dialogField("Purchase price", item.purchasePrice?.toString().orEmpty(), R.id.ai_edit_purchase)
-        val replacement = dialogField("Estimated replacement value", item.replacementValue?.toString().orEmpty(), R.id.ai_edit_replacement)
-        val notes = dialogField("Notes", item.notes, R.id.ai_edit_notes)
-        AlertDialog.Builder(this)
-            .setTitle("Edit detected item")
-            .setView(box)
-            .setNegativeButton("Cancel", null)
-            .setPositiveButton("Apply") { _, _ ->
-                detectedItems[index] = item.copy(
-                    name = name.text.toString().trim(),
-                    category = category.text.toString().trim(),
-                    brand = brand.text.toString().trim(),
-                    model = model.text.toString().trim(),
-                    serialNumber = serial.text.toString().trim(),
-                    quantity = quantity.text.toString().toIntOrNull()?.coerceAtLeast(0) ?: 1,
-                    purchasePrice = parsePrice(purchase.text.toString()),
-                    replacementValue = parsePrice(replacement.text.toString()),
-                    notes = notes.text.toString()
-                )
-                showAiConfirmation()
+        val body = screen("Edit draft item", { showAiConfirmation() })
+        val name = addField(body, "Name", R.id.ai_edit_name, "Item name", item.name)
+        val category = addField(body, "Category", R.id.ai_edit_category, "Category", item.category)
+        val brand = addField(body, "Brand", R.id.ai_edit_brand, "Brand", item.brand)
+        val model = addField(body, "Model", R.id.ai_edit_model, "Model", item.model)
+        val serial = addField(body, "Serial number", R.id.ai_edit_serial, "Serial number", item.serialNumber)
+        val quantity = addField(body, "Quantity", R.id.ai_edit_quantity, "1", item.quantity.toString(), NUMBER_INPUT)
+        val purchase = addField(body, "Purchase price", R.id.ai_edit_purchase, "Optional", item.purchasePrice?.toString().orEmpty(), DECIMAL_INPUT)
+        val replacement = addField(body, "Estimated replacement value", R.id.ai_edit_replacement, "Optional", item.replacementValue?.toString().orEmpty(), DECIMAL_INPUT)
+        val notes = addField(body, "Notes", R.id.ai_edit_notes, "Notes", item.notes, multiline = true)
+        body.addView(button("Apply changes", R.id.ai_edit_apply, true) {
+            val editedName = name.text.toString().trim()
+            if (editedName.isEmpty()) {
+                name.error = "Name is required"
+                return@button
             }
-            .show()
+            detectedItems[index] = item.copy(
+                name = editedName,
+                category = category.text.toString().trim(),
+                brand = brand.text.toString().trim(),
+                model = model.text.toString().trim(),
+                serialNumber = serial.text.toString().trim(),
+                quantity = quantity.text.toString().toIntOrNull()?.coerceAtLeast(0) ?: 1,
+                purchasePrice = parsePrice(purchase.text.toString()),
+                replacementValue = parsePrice(replacement.text.toString()),
+                notes = notes.text.toString()
+            )
+            showAiConfirmation()
+        }, matchWrap())
     }
 
     private fun requestPdfExport() {
@@ -719,6 +720,7 @@ class MainActivity : Activity() {
         }
         if (back != null) {
             header.addView(button("‹", primary = false, action = back).apply {
+                id = R.id.screen_back
                 textSize = 25f
                 minWidth = dp(46)
             })

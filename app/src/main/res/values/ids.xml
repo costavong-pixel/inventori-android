@@ -1,5 +1,6 @@
 <resources>
     <item name="onboarding_continue" type="id" />
+    <item name="screen_back" type="id" />
     <item name="home_add_item" type="id" />
     <item name="home_locations" type="id" />
     <item name="home_export_pdf" type="id" />
@@ -31,6 +32,11 @@
     <item name="item_pick_document" type="id" />
     <item name="ai_confirm_save" type="id" />
     <item name="ai_draft_edit_0" type="id" />
+    <item name="ai_draft_edit_1" type="id" />
+    <item name="ai_draft_edit_2" type="id" />
+    <item name="ai_draft_remove_0" type="id" />
+    <item name="ai_add_draft" type="id" />
+    <item name="ai_edit_apply" type="id" />
     <item name="ai_edit_name" type="id" />
     <item name="ai_edit_category" type="id" />
     <item name="ai_edit_brand" type="id" />
