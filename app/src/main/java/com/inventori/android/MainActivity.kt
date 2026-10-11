@@ -473,17 +473,15 @@ class MainActivity : Activity() {
 
     private fun chooseAiInput(count: Int) {
         pendingAiCount = count
-        AlertDialog.Builder(this)
-            .setTitle("AI item draft · local mock")
-            .setItems(arrayOf("Take a photo", "Choose from gallery", "Use mock sample")) { _, choice ->
-                when (choice) {
-                    0 -> startCamera(REQUEST_AI_CAMERA)
-                    1 -> startGallery(REQUEST_AI_GALLERY)
-                    else -> runAiRecognition(null, count)
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+        val body = screen("AI photo input", { showHome() })
+        body.addView(label("Use a camera or gallery photo. V1 uses a local mock recognizer; no photo is sent to an AI service.", 14, COLOR_MUTED))
+        body.addView(spacer(12))
+        body.addView(button("Take a photo") { startCamera(REQUEST_AI_CAMERA) }, matchWrap())
+        body.addView(button("Choose from gallery") { startGallery(REQUEST_AI_GALLERY) }, matchWrap())
+        body.addView(button("Use mock sample", R.id.ai_mock_sample, true) {
+            runAiRecognition(null, count)
+            pendingAiCount = 0
+        }, matchWrap())
     }
 
     private fun runAiRecognition(photoPath: String?, count: Int) {

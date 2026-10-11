@@ -7,6 +7,7 @@
     <item name="home_items" type="id" />
     <item name="ai_one" type="id" />
     <item name="ai_multiple" type="id" />
+    <item name="ai_mock_sample" type="id" />
     <item name="locations_add_button" type="id" />
     <item name="location_name_input" type="id" />
     <item name="location_type_spinner" type="id" />

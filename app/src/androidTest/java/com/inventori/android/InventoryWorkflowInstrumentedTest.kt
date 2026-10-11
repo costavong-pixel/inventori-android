@@ -39,9 +39,9 @@ class InventoryWorkflowInstrumentedTest {
         continueOnboarding(device)
 
         tapId(device, "home_locations")
-        createLocation(device, "Home", null, null)
-        createLocation(device, "Basement", "Room", "Home")
-        createLocation(device, "Box 4", "Box / bin", "Home → Basement")
+        createLocation(scenario, device, "Home", null, null)
+        createLocation(scenario, device, "Basement", "Room", "Home")
+        createLocation(scenario, device, "Box 4", "Box / bin", "Home → Basement")
         device.findObject(By.text("‹")).click()
         device.waitForIdle()
 
@@ -100,7 +100,7 @@ class InventoryWorkflowInstrumentedTest {
         val device = UiDevice.getInstance(instrumentation)
         continueOnboarding(device)
         tapId(device, "ai_multiple")
-        tapText(device, "Use mock sample")
+        tapId(device, "ai_mock_sample")
         assertTrue(device.hasObject(By.text("Detected power drill")))
         assertTrue(device.hasObject(By.text("Detected battery pack")))
 
@@ -219,21 +219,30 @@ class InventoryWorkflowInstrumentedTest {
         tapId(device, "onboarding_continue")
     }
 
-    private fun createLocation(device: UiDevice, name: String, type: String?, parent: String?) {
+    private fun createLocation(
+        scenario: ActivityScenario<MainActivity>,
+        device: UiDevice,
+        name: String,
+        type: String?,
+        parent: String?
+    ) {
         tapId(device, "locations_add_button")
-        val nameInput = device.wait(Until.findObject(By.res(packageName, "location_name_input")), 5_000)
-            ?: error("Location name field did not appear")
-        nameInput.setText(name)
-        device.pressBack()
-        if (type != null) {
-            device.findObject(By.res(packageName, "location_type_spinner")).click()
-            tapText(device, type)
+        scenario.onActivity { activity ->
+            activity.findViewById<EditText>(R.id.location_name_input).setText(name)
+            val typeSpinner = activity.findViewById<Spinner>(R.id.location_type_spinner)
+            if (type != null) {
+                typeSpinner.setSelection((0 until typeSpinner.count).first {
+                    typeSpinner.getItemAtPosition(it).toString() == type
+                })
+            }
+            val parentSpinner = activity.findViewById<Spinner>(R.id.location_parent_spinner)
+            if (parent != null) {
+                parentSpinner.setSelection((0 until parentSpinner.count).first {
+                    parentSpinner.getItemAtPosition(it).toString() == parent
+                })
+            }
+            activity.findViewById<Button>(R.id.location_save_button).performClick()
         }
-        if (parent != null) {
-            device.findObject(By.res(packageName, "location_parent_spinner")).click()
-            tapText(device, parent)
-        }
-        tapId(device, "location_save_button")
         device.waitForIdle()
     }
 
