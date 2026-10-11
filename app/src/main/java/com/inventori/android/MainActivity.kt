@@ -631,7 +631,7 @@ class MainActivity : Activity() {
     }
 
     @Deprecated("Handled through Android document and camera activities")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+    public override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) {
             if (requestCode == REQUEST_AI_CAMERA || requestCode == REQUEST_AI_GALLERY) pendingAiCount = 0

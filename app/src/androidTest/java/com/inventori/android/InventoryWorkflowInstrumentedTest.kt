@@ -12,6 +12,7 @@ import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Direction
 import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.Until
 import androidx.core.content.FileProvider
@@ -109,9 +110,9 @@ class InventoryWorkflowInstrumentedTest {
         firstName.setText("Edited detected drill")
         device.pressBack()
         tapText(device, "Apply")
-        device.findObject(By.scrollable(true)).scrollToEnd(8)
+        scrollToBottom(device)
         tapText(device, "＋ Add another item")
-        device.findObject(By.scrollable(true)).scrollToEnd(8)
+        scrollToBottom(device)
         val editButtons = device.findObjects(By.text("Edit"))
         editButtons.last().click()
         val addedName = device.findObject(By.res(packageName, "ai_edit_name"))
@@ -120,10 +121,10 @@ class InventoryWorkflowInstrumentedTest {
         device.pressBack()
         tapText(device, "Apply")
 
-        device.findObject(By.scrollable(true)).scrollToBeginning(8)
+        scrollToTop(device)
         device.findObjects(By.text("Remove")).first().click()
         assertFalse(device.hasObject(By.text("Edited detected drill")))
-        device.findObject(By.scrollable(true)).scrollToEnd(8)
+        scrollToBottom(device)
         tapId(device, "ai_confirm_save")
         val db = InventoryDatabase(context)
         val saved = db.items()
@@ -248,5 +249,19 @@ class InventoryWorkflowInstrumentedTest {
         assertNotNull("Missing UI text: " + text, target)
         target.click()
         device.waitForIdle()
+    }
+
+    private fun scrollToBottom(device: UiDevice) {
+        val view = device.findObject(By.scrollable(true)) ?: return
+        repeat(12) {
+            if (!view.scroll(Direction.DOWN, 0.82f)) return
+        }
+    }
+
+    private fun scrollToTop(device: UiDevice) {
+        val view = device.findObject(By.scrollable(true)) ?: return
+        repeat(12) {
+            if (!view.scroll(Direction.UP, 0.82f)) return
+        }
     }
 }
