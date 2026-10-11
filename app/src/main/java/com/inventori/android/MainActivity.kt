@@ -133,7 +133,7 @@ class MainActivity : Activity() {
         val search = EditText(this).apply {
             id = R.id.home_search
             hint = "Search name, brand, model, serial, location…"
-            singleLine = true
+            isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             setText(searchQuery)
             setPadding(dp(14), dp(12), dp(14), dp(12))
@@ -169,17 +169,18 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
         }
         body.addView(results, matchWrap())
-        renderItems(results, database.searchItems(searchQuery))
+        renderItems(results, database.searchItems(searchQuery), searchQuery)
         search.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                renderItems(results, database.searchItems(s?.toString().orEmpty()))
+                val query = s?.toString().orEmpty()
+                renderItems(results, database.searchItems(query), query)
             }
             override fun afterTextChanged(s: Editable?) = Unit
         })
     }
 
-    private fun renderItems(container: LinearLayout, items: List<InventoryItem>) {
+    private fun renderItems(container: LinearLayout, items: List<InventoryItem>, query: String) {
         container.removeAllViews()
         if (items.isEmpty()) {
             val empty = card()
@@ -213,9 +214,9 @@ class MainActivity : Activity() {
             if (valueLine.isNotBlank()) itemCard.addView(label(valueLine, 13, COLOR_MUTED))
             val actionRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             if (item.itemType == InventoryItem.TYPE_QUANTITY) {
-                actionRow.addView(button("−1") { database.setQuantity(item.id, item.quantity - 1); showHome(searchText(search)) },
+                actionRow.addView(button("−1") { database.setQuantity(item.id, item.quantity - 1); showHome(query) },
                     LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
-                actionRow.addView(button("+1") { database.setQuantity(item.id, item.quantity + 1); showHome(searchText(search)) },
+                actionRow.addView(button("+1") { database.setQuantity(item.id, item.quantity + 1); showHome(query) },
                     LinearLayout.LayoutParams(0, dp(42), 1f).apply { marginEnd = dp(4) })
             }
             actionRow.addView(button("Details") { showItemDetail(item.id) },
@@ -258,7 +259,7 @@ class MainActivity : Activity() {
         val name = EditText(this).apply {
             id = R.id.location_name_input
             hint = "Location name (e.g. Home, Basement, Box 4)"
-            singleLine = true
+            isSingleLine = true
         }
         box.addView(name, matchWrap())
         box.addView(spacer(8))
@@ -557,7 +558,7 @@ class MainActivity : Activity() {
             id = viewId
             this.hint = hint
             setText(value)
-            singleLine = true
+            isSingleLine = true
         }.also { box.addView(it, matchWrap()) }
         val name = dialogField("Name", item.name, R.id.ai_edit_name)
         val category = dialogField("Category", item.category, R.id.ai_edit_category)
@@ -712,7 +713,7 @@ class MainActivity : Activity() {
                 minLines = 3
                 gravity = Gravity.TOP or Gravity.START
             } else {
-                singleLine = true
+            isSingleLine = true
             }
             setPadding(dp(12), dp(10), dp(12), dp(10))
             setBackground(rounded(COLOR_WHITE, COLOR_BORDER, 10))
@@ -753,7 +754,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(8), dp(16), dp(26))
         }
-        scroll.addView(body, ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        scroll.addView(body)
         outer.addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         setContentView(outer)
         return body
