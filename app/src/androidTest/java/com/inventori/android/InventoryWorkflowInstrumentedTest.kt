@@ -42,7 +42,7 @@ class InventoryWorkflowInstrumentedTest {
         createLocation(scenario, device, "Basement", "Room", "Home")
         createLocation(scenario, device, "Box 4", "Box / bin", "Home → Basement")
         tapId(device, "screen_back")
-        scenario.onActivity { it.findViewById<Button>(R.id.home_add_item).performClick() }
+        tapId(device, "home_add_item")
         scenario.onActivity { activity ->
             activity.findViewById<EditText>(R.id.item_name).setText("UI Test Camera")
             activity.findViewById<EditText>(R.id.item_category).setText("Electronics")
@@ -239,7 +239,9 @@ class InventoryWorkflowInstrumentedTest {
         FileProvider.getUriForFile(context, "com.inventori.android.fileprovider", file)
 
     private fun tapId(device: UiDevice, id: String) {
-        val target = device.findObject(By.res(packageName, id))
+        val selector = By.res(packageName, id)
+        assertTrue("Timed out waiting for UI control: " + id, device.wait(Until.hasObject(selector), 5_000))
+        val target = device.findObject(selector)
         assertNotNull("Missing UI control: " + id, target)
         target.click()
         device.waitForIdle()
