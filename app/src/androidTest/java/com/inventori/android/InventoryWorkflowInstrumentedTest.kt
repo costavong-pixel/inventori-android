@@ -41,7 +41,12 @@ class InventoryWorkflowInstrumentedTest {
         createLocation(scenario, device, "Home", null, null)
         createLocation(scenario, device, "Basement", "Room", "Home")
         createLocation(scenario, device, "Box 4", "Box / bin", "Home → Basement")
-        tapId(device, "screen_back")
+        scenario.onActivity { activity ->
+            val backButton = activity.findViewById<Button>(R.id.screen_back)
+            assertNotNull("Missing location screen back button", backButton)
+            backButton.performClick()
+        }
+        device.waitForIdle()
         tapId(device, "home_add_item")
         scenario.onActivity { activity ->
             activity.findViewById<EditText>(R.id.item_name).setText("UI Test Camera")
