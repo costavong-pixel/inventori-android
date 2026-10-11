@@ -225,11 +225,22 @@ class MainActivity : Activity() {
         body.addView(spacer(8))
 
         val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        actions.addView(button("Scan multiple", R.id.ai_multiple) { chooseAiInput(3) },
-            LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(5) })
-        actions.addView(button("Add manually", R.id.home_add_item, primary = true) {
+        actions.addView(button("Scan many", R.id.ai_multiple) { chooseAiInput(3) }.apply {
+            setPadding(dp(8), dp(7), dp(8), dp(7))
+            textSize = 13f
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginEnd = dp(4) })
+        actions.addView(button("Add item", R.id.home_add_item, primary = true) {
             showItemForm(null)
-        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(5) })
+        }.apply {
+            setPadding(dp(8), dp(7), dp(8), dp(7))
+            textSize = 13f
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4); marginEnd = dp(4) })
+        actions.addView(button("Locations", R.id.home_locations, leadingIcon = R.drawable.ic_location) {
+            showLocations()
+        }.apply {
+            setPadding(dp(8), dp(7), dp(8), dp(7))
+            textSize = 13f
+        }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4) })
         body.addView(actions)
         body.addView(spacer(22))
         body.addView(sectionHeading("Recent items", "Updated as you add or edit things"))
@@ -247,7 +258,7 @@ class MainActivity : Activity() {
         }
         locationHeading.addView(sectionHeading("Your locations", "${allLocations.size} places in your inventory"),
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        locationHeading.addView(button("View all", R.id.home_locations) { showLocations() })
+        locationHeading.addView(button("See all") { showLocations() })
         body.addView(locationHeading, matchWrap())
         body.addView(spacer(8))
         if (allLocations.isEmpty()) {
