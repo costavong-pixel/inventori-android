@@ -6,7 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 
 class InventoryDatabase(context: Context) :
-    SQLiteOpenHelper(context, "inventori.db", null, 1) {
+    SQLiteOpenHelper(context, "inventori.db", null, 2) {
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -28,12 +28,18 @@ class InventoryDatabase(context: Context) :
                 brand TEXT NOT NULL DEFAULT '',
                 model TEXT NOT NULL DEFAULT '',
                 serial_number TEXT NOT NULL DEFAULT '',
+                identifier_type TEXT NOT NULL DEFAULT 'NONE',
+                identifier_value TEXT NOT NULL DEFAULT '',
                 quantity INTEGER NOT NULL DEFAULT 1,
                 purchase_price REAL,
                 replacement_value REAL,
                 notes TEXT NOT NULL DEFAULT '',
                 receipt_path TEXT,
                 document_path TEXT,
+                evidence_latitude REAL,
+                evidence_longitude REAL,
+                evidence_accuracy_meters REAL,
+                evidence_captured_at INTEGER,
                 location_id INTEGER,
                 status TEXT NOT NULL DEFAULT 'AVAILABLE',
                 created_at INTEGER NOT NULL,
@@ -42,10 +48,21 @@ class InventoryDatabase(context: Context) :
             )"""
         )
         db.execSQL("CREATE INDEX items_name_idx ON items(name COLLATE NOCASE)")
+        db.execSQL("CREATE INDEX items_identifier_idx ON items(identifier_value COLLATE NOCASE)")
         db.execSQL("CREATE INDEX locations_parent_idx ON locations(parent_id)")
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            db.execSQL("ALTER TABLE items ADD COLUMN identifier_type TEXT NOT NULL DEFAULT 'NONE'")
+            db.execSQL("ALTER TABLE items ADD COLUMN identifier_value TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE items ADD COLUMN evidence_latitude REAL")
+            db.execSQL("ALTER TABLE items ADD COLUMN evidence_longitude REAL")
+            db.execSQL("ALTER TABLE items ADD COLUMN evidence_accuracy_meters REAL")
+            db.execSQL("ALTER TABLE items ADD COLUMN evidence_captured_at INTEGER")
+            db.execSQL("CREATE INDEX IF NOT EXISTS items_identifier_idx ON items(identifier_value COLLATE NOCASE)")
+        }
+    }
 
     fun locations(): List<InventoryLocation> {
         val result = mutableListOf<InventoryLocation>()
@@ -81,12 +98,18 @@ class InventoryDatabase(context: Context) :
             put("brand", item.brand.trim())
             put("model", item.model.trim())
             put("serial_number", item.serialNumber.trim())
+            put("identifier_type", item.identifierType)
+            put("identifier_value", item.identifierValue.trim())
             put("quantity", if (item.itemType == InventoryItem.TYPE_UNIQUE) 1 else item.quantity.coerceAtLeast(0))
             putNullableDouble("purchase_price", item.purchasePrice)
             putNullableDouble("replacement_value", item.replacementValue)
             put("notes", item.notes.trim())
             putNullable("receipt_path", item.receiptPath)
             putNullable("document_path", item.documentPath)
+            putNullableDouble("evidence_latitude", item.evidenceLatitude)
+            putNullableDouble("evidence_longitude", item.evidenceLongitude)
+            putNullableFloat("evidence_accuracy_meters", item.evidenceAccuracyMeters)
+            if (item.evidenceCapturedAt == null) putNull("evidence_captured_at") else put("evidence_captured_at", item.evidenceCapturedAt)
             if (item.locationId == null) putNull("location_id") else put("location_id", item.locationId)
             put("status", item.status)
             if (item.id == 0L) put("created_at", now)
@@ -172,7 +195,7 @@ class InventoryDatabase(context: Context) :
         val byId = locations().associateBy { it.id }
         return items().filter { item ->
             val path = locationPathFromMap(item.locationId, byId)
-            listOf(item.name, item.brand, item.category, item.model, item.serialNumber, path)
+            listOf(item.name, item.brand, item.category, item.model, item.serialNumber, item.identifierType, item.identifierValue, path)
                 .any { it.lowercase().contains(normalized) }
         }
     }
@@ -200,12 +223,18 @@ class InventoryDatabase(context: Context) :
             brand = getString(getColumnIndexOrThrow("brand")),
             model = getString(getColumnIndexOrThrow("model")),
             serialNumber = getString(getColumnIndexOrThrow("serial_number")),
+            identifierType = getString(getColumnIndexOrThrow("identifier_type")),
+            identifierValue = getString(getColumnIndexOrThrow("identifier_value")),
             quantity = getInt(getColumnIndexOrThrow("quantity")),
             purchasePrice = nullableDouble("purchase_price"),
             replacementValue = nullableDouble("replacement_value"),
             notes = getString(getColumnIndexOrThrow("notes")),
             receiptPath = getString(getColumnIndexOrThrow("receipt_path")),
             documentPath = getString(getColumnIndexOrThrow("document_path")),
+            evidenceLatitude = nullableDouble("evidence_latitude"),
+            evidenceLongitude = nullableDouble("evidence_longitude"),
+            evidenceAccuracyMeters = nullableFloat("evidence_accuracy_meters"),
+            evidenceCapturedAt = nullableLong("evidence_captured_at"),
             locationId = nullableLong("location_id"),
             status = getString(getColumnIndexOrThrow("status")),
             createdAt = getLong(getColumnIndexOrThrow("created_at")),
@@ -226,7 +255,16 @@ class InventoryDatabase(context: Context) :
         if (value == null) putNull(key) else put(key, value)
     }
 
+    private fun android.database.Cursor.nullableFloat(column: String): Float? {
+        val index = getColumnIndexOrThrow(column)
+        return if (isNull(index)) null else getFloat(index)
+    }
+
     private fun ContentValues.putNullableDouble(key: String, value: Double?) {
+        if (value == null) putNull(key) else put(key, value)
+    }
+
+    private fun ContentValues.putNullableFloat(key: String, value: Float?) {
         if (value == null) putNull(key) else put(key, value)
     }
 }

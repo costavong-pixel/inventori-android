@@ -16,12 +16,18 @@ data class InventoryItem(
     val brand: String = "",
     val model: String = "",
     val serialNumber: String = "",
+    val identifierType: String = IDENTIFIER_NONE,
+    val identifierValue: String = "",
     val quantity: Int = 1,
     val purchasePrice: Double? = null,
     val replacementValue: Double? = null,
     val notes: String = "",
     val receiptPath: String? = null,
     val documentPath: String? = null,
+    val evidenceLatitude: Double? = null,
+    val evidenceLongitude: Double? = null,
+    val evidenceAccuracyMeters: Float? = null,
+    val evidenceCapturedAt: Long? = null,
     val locationId: Long? = null,
     val status: String = STATUS_AVAILABLE,
     val createdAt: Long = System.currentTimeMillis(),
@@ -33,5 +39,11 @@ data class InventoryItem(
         const val STATUS_AVAILABLE = "AVAILABLE"
         const val STATUS_CHECKED_OUT = "CHECKED_OUT"
         const val STATUS_RETURNED = "RETURNED"
+        const val IDENTIFIER_NONE = "NONE"
+        const val IDENTIFIER_QR = "QR"
+        const val IDENTIFIER_BARCODE = "BARCODE"
+        const val IDENTIFIER_NFC = "NFC"
+        const val IDENTIFIER_RFID = "RFID"
+        const val IDENTIFIER_OTHER = "OTHER"
     }
 }

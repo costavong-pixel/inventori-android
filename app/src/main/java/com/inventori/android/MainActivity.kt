@@ -1,9 +1,13 @@
 package com.inventori.android
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.location.Location
+import android.location.LocationManager
 import android.graphics.Color
 import android.graphics.BitmapFactory
 import android.graphics.drawable.RippleDrawable
@@ -27,9 +31,12 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import java.io.File
 import java.io.FileOutputStream
 import java.text.NumberFormat
+import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var database: InventoryDatabase
@@ -52,12 +59,15 @@ class MainActivity : Activity() {
     private lateinit var formBrand: EditText
     private lateinit var formModel: EditText
     private lateinit var formSerial: EditText
+    private lateinit var formIdentifierType: Spinner
+    private lateinit var formIdentifierValue: EditText
     private lateinit var formQuantity: EditText
     private lateinit var formPurchase: EditText
     private lateinit var formReplacement: EditText
     private lateinit var formNotes: EditText
     private lateinit var formType: Spinner
     private lateinit var formLocation: Spinner
+    private var formEvidenceLocation: Location? = null
 
     private val darkUi: Boolean
         get() = (resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
@@ -86,6 +96,22 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         if (::database.isInitialized) database.close()
         super.onDestroy()
+    }
+
+    private fun showWorkspacePicker() {
+        val modes = listOf(MODE_HOME, MODE_MOVING, MODE_BUSINESS)
+        val titles = modes.map(::modeTitle).toTypedArray()
+        val selected = modes.indexOf(selectedMode).coerceAtLeast(0)
+        AlertDialog.Builder(this)
+            .setTitle("Choose workspace")
+            .setSingleChoiceItems(titles, selected) { dialog, which ->
+                selectedMode = modes[which]
+                preferences.edit().putString(KEY_MODE, selectedMode).apply()
+                dialog.dismiss()
+                showHome()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun showOnboarding() {
@@ -159,21 +185,9 @@ class MainActivity : Activity() {
             }
             body.addView(value, matchWrap())
         }
-        body.addView(spacer(20))
-
-        val modeRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        listOf(MODE_HOME, MODE_MOVING, MODE_BUSINESS).forEach { mode ->
-            val modeButton = button(modeShortTitle(mode), primary = selectedMode == mode) {
-                selectedMode = mode
-                preferences.edit().putString(KEY_MODE, mode).apply()
-                showHome(searchQuery)
-            }
-            modeRow.addView(modeButton, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
-                marginEnd = dp(5)
-            })
-        }
-        body.addView(modeRow)
-        body.addView(spacer(16))
+        body.addView(spacer(14))
+        body.addView(label("Workspace: " + modeTitle(selectedMode) + " · tap the workspace name under Inventori to switch.", 12, COLOR_MUTED))
+        body.addView(spacer(12))
 
         val searchBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -216,9 +230,19 @@ class MainActivity : Activity() {
         scanCard.addView(scanIcon, LinearLayout.LayoutParams(dp(58), dp(58)))
         scanCard.addView(spacerHorizontal(15))
         val scanCopy = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scanCopy.addView(label("Scan an item", 18, Color.WHITE, true))
+        val scanTitle = when (selectedMode) {
+            MODE_MOVING -> "Pack an item"
+            MODE_BUSINESS -> "Scan stock / equipment"
+            else -> "Scan an item"
+        }
+        val scanSubtitle = when (selectedMode) {
+            MODE_MOVING -> "Add it to a box, shelf, or room"
+            MODE_BUSINESS -> "Track stock, tools, and equipment"
+            else -> "Capture a photo to start"
+        }
+        scanCopy.addView(label(scanTitle, 18, Color.WHITE, true))
         scanCopy.addView(spacer(4))
-        scanCopy.addView(label("Capture a photo to start", 13, 0xFFD8E9DE.toInt()))
+        scanCopy.addView(label(scanSubtitle, 13, 0xFFD8E9DE.toInt()))
         scanCard.addView(scanCopy, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         scanCard.addView(iconView(R.drawable.ic_arrow_right, Color.WHITE, 22))
         body.addView(scanCard, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(100)))
@@ -411,6 +435,7 @@ class MainActivity : Activity() {
         formPhotoPath = existing?.photoPath
         formReceiptPath = existing?.receiptPath
         formDocumentPath = existing?.documentPath
+        formEvidenceLocation = null
         val body = screen(if (existing == null) "Add item" else "Edit item", { showHome() })
         body.addView(label("Enter what you know. Price, replacement value, receipt, and document are optional.", 14, COLOR_MUTED))
         body.addView(spacer(10))
@@ -423,6 +448,16 @@ class MainActivity : Activity() {
         formBrand = addField(body, "Brand", R.id.item_brand, "Brand", existing?.brand.orEmpty())
         formModel = addField(body, "Model", R.id.item_model, "Model", existing?.model.orEmpty())
         formSerial = addField(body, "Serial number", R.id.item_serial, "Serial number", existing?.serialNumber.orEmpty())
+        body.addView(label("Inventory identifier", 13, COLOR_MUTED, true))
+        val identifierTypes = listOf("None", "QR code", "Barcode", "NFC tag", "RFID / EPC", "Other")
+        val identifierValues = identifierTypeValues()
+        formIdentifierType = spinner(identifierTypes).apply { id = R.id.item_identifier_type }
+        val identifierSelection = identifierValues.indexOf(existing?.identifierType ?: InventoryItem.IDENTIFIER_NONE).let { if (it < 0) 0 else it }
+        formIdentifierType.setSelection(identifierSelection)
+        body.addView(formIdentifierType, matchWrap())
+        formIdentifierValue = addField(body, "Code / tag ID", R.id.item_identifier_value, "Optional QR, barcode, NFC UID, RFID EPC…", existing?.identifierValue.orEmpty())
+        body.addView(label("Bluetooth barcode or UHF RFID scanners in keyboard/HID mode can enter their code here.", 12, COLOR_MUTED))
+        body.addView(spacer(6))
         formQuantity = addField(body, "Quantity", R.id.item_quantity, "1", (existing?.quantity ?: 1).toString(), NUMBER_INPUT)
         formPurchase = addField(body, "Purchase price", R.id.item_purchase_price, "Optional", existing?.purchasePrice?.toString().orEmpty(), DECIMAL_INPUT)
         formReplacement = addField(body, "Estimated replacement value", R.id.item_replacement_value, "Your estimate · optional", existing?.replacementValue?.toString().orEmpty(), DECIMAL_INPUT)
@@ -495,12 +530,18 @@ class MainActivity : Activity() {
             brand = formBrand.text.toString(),
             model = formModel.text.toString(),
             serialNumber = formSerial.text.toString(),
+            identifierType = identifierTypeValues().getOrElse(formIdentifierType.selectedItemPosition) { InventoryItem.IDENTIFIER_NONE },
+            identifierValue = formIdentifierValue.text.toString(),
             quantity = if (type == InventoryItem.TYPE_UNIQUE) 1 else quantity ?: 0,
             purchasePrice = purchase,
             replacementValue = replacement,
             notes = formNotes.text.toString(),
             receiptPath = formReceiptPath,
             documentPath = formDocumentPath,
+            evidenceLatitude = formEvidenceLocation?.latitude ?: base.evidenceLatitude,
+            evidenceLongitude = formEvidenceLocation?.longitude ?: base.evidenceLongitude,
+            evidenceAccuracyMeters = formEvidenceLocation?.accuracy ?: base.evidenceAccuracyMeters,
+            evidenceCapturedAt = formEvidenceLocation?.time?.takeIf { it > 0 } ?: base.evidenceCapturedAt,
             locationId = location,
             status = if (type == InventoryItem.TYPE_QUANTITY) InventoryItem.STATUS_AVAILABLE else base.status
         )
@@ -530,6 +571,8 @@ class MainActivity : Activity() {
             "Brand" to item.brand,
             "Model" to item.model,
             "Serial number" to item.serialNumber,
+            "Inventory ID" to identifierDisplay(item),
+            "Evidence GPS" to evidenceLocationText(item),
             "Purchase price" to item.purchasePrice?.let(::money).orEmpty(),
             "Estimated replacement" to item.replacementValue?.let(::money).orEmpty(),
             "Notes" to item.notes,
@@ -617,7 +660,15 @@ class MainActivity : Activity() {
     }
 
     private fun runAiRecognition(photoPath: String?, count: Int) {
-        detectedItems = aiRecognizer.recognize(photoPath, count).toMutableList()
+        val evidence = if (photoPath.isNullOrBlank()) null else currentEvidenceLocation()
+        detectedItems = aiRecognizer.recognize(photoPath, count).map { item ->
+            if (evidence == null) item else item.copy(
+                evidenceLatitude = evidence.latitude,
+                evidenceLongitude = evidence.longitude,
+                evidenceAccuracyMeters = evidence.accuracy,
+                evidenceCapturedAt = evidence.time.takeIf { it > 0 } ?: System.currentTimeMillis()
+            )
+        }.toMutableList()
         showAiConfirmation()
     }
 
@@ -728,8 +779,29 @@ class MainActivity : Activity() {
         body.addView(button("Export inventory PDF", R.id.home_export_pdf, true, leadingIcon = R.drawable.ic_download) {
             requestPdfExport()
         }, matchWrap())
+        if (selectedMode == MODE_HOME) {
+            body.addView(spacer(14))
+            val gpsEnabled = preferences.getBoolean(KEY_EVIDENCE_GPS, false)
+            val gpsCard = card(COLOR_SURFACE_VARIANT)
+            gpsCard.addView(label("Optional evidence GPS", 17, COLOR_INK, true))
+            gpsCard.addView(spacer(4))
+            gpsCard.addView(label(
+                if (gpsEnabled) "On · future item photos can record the phone's available capture location."
+                else "Off · turn this on only if you want capture location stored with future evidence photos.",
+                13, COLOR_MUTED
+            ))
+            gpsCard.addView(spacer(10))
+            gpsCard.addView(button(if (gpsEnabled) "Turn evidence GPS off" else "Turn evidence GPS on", R.id.reports_gps_toggle, primary = !gpsEnabled) {
+                if (gpsEnabled) {
+                    preferences.edit().putBoolean(KEY_EVIDENCE_GPS, false).apply()
+                    toast("Evidence GPS turned off")
+                    showReports()
+                } else enableEvidenceGps()
+            }, matchWrap())
+            body.addView(gpsCard, matchWrap())
+        }
         body.addView(spacer(10))
-        body.addView(label("Values are estimates you entered. The report does not guarantee an insurance claim.", 13, COLOR_MUTED))
+        body.addView(label("Values are estimates you entered. GPS is optional evidence metadata. The report does not guarantee an insurance claim.", 13, COLOR_MUTED))
     }
 
     private fun startCamera(requestCode: Int) {
@@ -773,10 +845,12 @@ class MainActivity : Activity() {
         when (requestCode) {
             REQUEST_ITEM_CAMERA -> {
                 formPhotoPath = cameraOutputPath
+                formEvidenceLocation = currentEvidenceLocation()
                 formPhotoStatus?.text = if (formPhotoPath == null) "No photo attached" else "Photo attached"
             }
             REQUEST_ITEM_GALLERY -> {
                 formPhotoPath = data?.data?.let { copyUriIntoPrivateFiles(it, "photo") }
+                formEvidenceLocation = currentEvidenceLocation()
                 formPhotoStatus?.text = if (formPhotoPath == null) "No photo attached" else "Photo attached"
             }
             REQUEST_AI_CAMERA -> {
@@ -808,6 +882,37 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private fun enableEvidenceGps() {
+        if (hasEvidenceLocationPermission()) {
+            preferences.edit().putBoolean(KEY_EVIDENCE_GPS, true).apply()
+            toast("Evidence GPS turned on")
+            showReports()
+            return
+        }
+        requestPermissions(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), REQUEST_EVIDENCE_LOCATION_PERMISSION)
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != REQUEST_EVIDENCE_LOCATION_PERMISSION) return
+        val granted = grantResults.any { it == PackageManager.PERMISSION_GRANTED }
+        preferences.edit().putBoolean(KEY_EVIDENCE_GPS, granted).apply()
+        toast(if (granted) "Evidence GPS turned on" else "Location permission was not granted")
+        showReports()
+    }
+
+    private fun hasEvidenceLocationPermission(): Boolean =
+        checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    private fun currentEvidenceLocation(): Location? {
+        if (!preferences.getBoolean(KEY_EVIDENCE_GPS, false) || !hasEvidenceLocationPermission()) return null
+        val manager = getSystemService(LOCATION_SERVICE) as LocationManager
+        return listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER, LocationManager.PASSIVE_PROVIDER)
+            .mapNotNull { provider -> runCatching { manager.getLastKnownLocation(provider) }.getOrNull() }
+            .maxByOrNull { it.time }
     }
 
     private fun copyUriIntoPrivateFiles(uri: Uri, prefix: String): String? = runCatching {
@@ -893,7 +998,15 @@ class MainActivity : Activity() {
         val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         if (back == null) {
             heading.addView(label("Inventori", 21, COLOR_INK, true))
-            heading.addView(label(title, 13, COLOR_MUTED))
+            val subtitle = label(if (title == modeTitle(selectedMode)) title + " ▾" else title, 13, COLOR_MUTED, title == modeTitle(selectedMode))
+            if (title == modeTitle(selectedMode)) {
+                subtitle.isClickable = true
+                subtitle.isFocusable = true
+                subtitle.contentDescription = "Change workspace"
+                subtitle.setPadding(0, dp(3), dp(12), dp(3))
+                subtitle.setOnClickListener { showWorkspacePicker() }
+            }
+            heading.addView(subtitle)
         } else {
             heading.addView(label("INVENTORI", 10, COLOR_PRIMARY, true))
             val titleLabel = label(title, 19, COLOR_INK, true)
@@ -903,6 +1016,13 @@ class MainActivity : Activity() {
         }
         header.addView(heading, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         outer.addView(header, matchWrap())
+        ViewCompat.setOnApplyWindowInsetsListener(outer) { _, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            header.setPadding(dp(20), dp(12) + bars.top, dp(20), dp(8))
+            outer.setPadding(0, 0, 0, bars.bottom)
+            insets
+        }
+        ViewCompat.requestApplyInsets(outer)
         val scroll = ScrollView(this).apply {
             clipToPadding = false
             isFillViewport = true
@@ -1116,6 +1236,33 @@ class MainActivity : Activity() {
         java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.MEDIUM, java.text.DateFormat.SHORT)
             .format(java.util.Date(epoch))
 
+    private fun identifierTypeValues(): List<String> = listOf(
+        InventoryItem.IDENTIFIER_NONE, InventoryItem.IDENTIFIER_QR, InventoryItem.IDENTIFIER_BARCODE,
+        InventoryItem.IDENTIFIER_NFC, InventoryItem.IDENTIFIER_RFID, InventoryItem.IDENTIFIER_OTHER
+    )
+
+    private fun identifierDisplay(item: InventoryItem): String {
+        if (item.identifierValue.isBlank()) return ""
+        val title = when (item.identifierType) {
+            InventoryItem.IDENTIFIER_QR -> "QR"
+            InventoryItem.IDENTIFIER_BARCODE -> "Barcode"
+            InventoryItem.IDENTIFIER_NFC -> "NFC"
+            InventoryItem.IDENTIFIER_RFID -> "RFID / EPC"
+            InventoryItem.IDENTIFIER_OTHER -> "Other"
+            else -> "Code"
+        }
+        return title + ": " + item.identifierValue
+    }
+
+    private fun evidenceLocationText(item: InventoryItem): String {
+        val lat = item.evidenceLatitude ?: return ""
+        val lon = item.evidenceLongitude ?: return ""
+        val coords = String.format(Locale.US, "%.5f, %.5f", lat, lon)
+        val accuracy = item.evidenceAccuracyMeters?.let { " · ±" + it.toInt() + " m" }.orEmpty()
+        val captured = item.evidenceCapturedAt?.let { " · " + dateText(it) }.orEmpty()
+        return coords + accuracy + captured
+    }
+
     private fun statusTitle(status: String): String = when (status) {
         InventoryItem.STATUS_CHECKED_OUT -> "Checked out"
         InventoryItem.STATUS_RETURNED -> "Returned"
@@ -1157,6 +1304,8 @@ class MainActivity : Activity() {
         private const val REQUEST_RECEIPT = 1005
         private const val REQUEST_DOCUMENT = 1006
         private const val REQUEST_EXPORT_PDF = 1007
+        private const val REQUEST_EVIDENCE_LOCATION_PERMISSION = 1008
+        private const val KEY_EVIDENCE_GPS = "evidence_gps"
         private const val TAB_INVENTORY = "inventory"
         private const val TAB_SCAN = "scan"
         private const val TAB_LOCATIONS = "locations"

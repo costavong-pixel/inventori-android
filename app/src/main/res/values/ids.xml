@@ -4,6 +4,7 @@
     <item name="home_add_item" type="id" />
     <item name="home_locations" type="id" />
     <item name="home_export_pdf" type="id" />
+    <item name="reports_gps_toggle" type="id" />
     <item name="home_search" type="id" />
     <item name="home_items" type="id" />
     <item name="nav_inventory" type="id" />
@@ -24,6 +25,8 @@
     <item name="item_brand" type="id" />
     <item name="item_model" type="id" />
     <item name="item_serial" type="id" />
+    <item name="item_identifier_type" type="id" />
+    <item name="item_identifier_value" type="id" />
     <item name="item_quantity" type="id" />
     <item name="item_purchase_price" type="id" />
     <item name="item_replacement_value" type="id" />
