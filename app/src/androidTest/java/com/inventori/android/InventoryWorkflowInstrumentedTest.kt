@@ -94,8 +94,12 @@ class InventoryWorkflowInstrumentedTest {
 
         scenario.close()
         scenario = ActivityScenario.launch(MainActivity::class.java)
-        device.wait(Until.hasObject(By.text("UI Test Camera")), 5_000)
-        assertTrue(device.hasObject(By.text("Home → Basement → Box 4")))
+        device.waitForIdle()
+        val reopenedAfterActivityRestart = InventoryDatabase(context)
+        val persisted = reopenedAfterActivityRestart.items().single { it.name == "UI Test Camera" }
+        assertEquals("Home → Basement → Box 4", reopenedAfterActivityRestart.locationPath(persisted.locationId))
+        assertEquals("0123456789012", persisted.identifierValue)
+        reopenedAfterActivityRestart.close()
         scenario.close()
     }
 
