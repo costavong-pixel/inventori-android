@@ -54,6 +54,8 @@ class InventoryWorkflowInstrumentedTest {
             activity.findViewById<EditText>(R.id.item_brand).setText("Acme")
             activity.findViewById<EditText>(R.id.item_model).setText("A1")
             activity.findViewById<EditText>(R.id.item_serial).setText("SERIAL-42")
+            activity.findViewById<Spinner>(R.id.item_identifier_type).setSelection(2)
+            activity.findViewById<EditText>(R.id.item_identifier_value).setText("0123456789012")
             activity.findViewById<Spinner>(R.id.item_location).setSelection(3)
         }
 
@@ -83,6 +85,8 @@ class InventoryWorkflowInstrumentedTest {
         assertEquals("Acme", saved.brand)
         assertEquals("A1", saved.model)
         assertEquals("SERIAL-42", saved.serialNumber)
+        assertEquals(InventoryItem.IDENTIFIER_BARCODE, saved.identifierType)
+        assertEquals("0123456789012", saved.identifierValue)
         assertTrue(File(saved.photoPath!!).exists())
         assertTrue(File(saved.receiptPath!!).exists())
         assertTrue(File(saved.documentPath!!).exists())
@@ -150,6 +154,8 @@ class InventoryWorkflowInstrumentedTest {
                 brand = "Acme",
                 model = "CS-9",
                 serialNumber = "CIR-778",
+                identifierType = InventoryItem.IDENTIFIER_RFID,
+                identifierValue = "EPC-300833B2DDD9014000000001",
                 purchasePrice = 149.99,
                 replacementValue = 220.0,
                 notes = "Blade guard intact",
@@ -169,7 +175,7 @@ class InventoryWorkflowInstrumentedTest {
             )
         )
         assertEquals("Home → Basement → Storage Room → Shelf → Box 4", db.locationPath(db.item(uniqueId)?.locationId))
-        listOf("Circular saw", "Acme", "Tools", "CS-9", "CIR-778", "Box 4").forEach { term ->
+        listOf("Circular saw", "Acme", "Tools", "CS-9", "CIR-778", "EPC-300833B2DDD9014000000001", "Box 4").forEach { term ->
             assertTrue("Search missed " + term, db.searchItems(term).any { it.id == uniqueId })
         }
         db.setStatus(uniqueId, InventoryItem.STATUS_CHECKED_OUT)

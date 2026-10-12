@@ -12,12 +12,13 @@ import java.io.OutputStream
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Date
+import java.util.Locale
 
 object InventoryPdfExporter {
     private const val PAGE_WIDTH = 595
     private const val PAGE_HEIGHT = 842
     private const val MARGIN = 40f
-    private const val ROW_HEIGHT = 140f
+    private const val ROW_HEIGHT = 172f
 
     fun export(
         context: Context,
@@ -101,6 +102,9 @@ object InventoryPdfExporter {
             textY += 13f
             canvas.drawText("Serial: " + item.serialNumber.ifBlank { "—" }, textX, textY, bodyPaint)
             textY += 13f
+            val identifier = if (item.identifierValue.isBlank()) "—" else item.identifierType + ": " + item.identifierValue
+            drawWrapped(canvas, "Inventory ID: " + identifier, textX, textY, textRight - textX, bodyPaint, 11f, 1)
+            textY += 13f
             val purchase = item.purchasePrice?.let { NumberFormat.getCurrencyInstance().format(it) } ?: "—"
             val replacement = item.replacementValue?.let { NumberFormat.getCurrencyInstance().format(it) } ?: "—"
             canvas.drawText("Purchase: " + purchase + "    Estimated replacement: " + replacement, textX, textY, bodyPaint)
@@ -108,6 +112,14 @@ object InventoryPdfExporter {
             canvas.drawText("Receipt: " + if (item.receiptPath.isNullOrBlank()) "not attached" else "attached", textX, textY, bodyPaint)
             val documentLabel = if (item.documentPath.isNullOrBlank()) "not attached" else "attached"
             canvas.drawText("Appraisal / document: " + documentLabel, textX + 180f, textY, bodyPaint)
+            if (item.evidenceLatitude != null && item.evidenceLongitude != null) {
+                textY += 13f
+                val coords = String.format(Locale.US, "%.5f, %.5f", item.evidenceLatitude, item.evidenceLongitude)
+                val gpsDate = item.evidenceCapturedAt?.let {
+                    " · " + DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
+                }.orEmpty()
+                canvas.drawText("Evidence GPS: " + coords + gpsDate, textX, textY, bodyPaint)
+            }
             if (item.notes.isNotBlank()) {
                 textY += 13f
                 canvas.drawText("Notes:", textX, textY, bodyPaint)

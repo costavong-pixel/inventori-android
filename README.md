@@ -37,3 +37,16 @@ The PDF is a basic user-generated inventory record. Replacement values are enter
 ## Security
 
 Do not commit API keys, passwords, signing keys, keystores, backend credentials, or local configuration. The repository .gitignore excludes common local secret and signing files. Debug builds use Android's standard debug signing and are not release-signed.
+
+
+## V2
+
+V2 adds:
+- Safe Android status/navigation bar insets so system buttons no longer cover Inventori controls.
+- One persistent workspace selector instead of three large Home / Moving / Business buttons.
+- Optional opt-in GPS evidence metadata for future Home Inventory photos. Inventori never requires GPS for normal use.
+- Searchable QR, barcode, NFC, RFID/EPC, and other inventory identifiers.
+- Compatibility with Bluetooth barcode and UHF RFID scanners that operate as keyboard/HID input.
+- Identifier and optional GPS metadata in item details and PDF exports.
+
+Dedicated vendor-specific UHF RFID reader SDK integration is intentionally deferred. V2 stores RFID/EPC identifiers without locking Inventori to one hardware brand.
