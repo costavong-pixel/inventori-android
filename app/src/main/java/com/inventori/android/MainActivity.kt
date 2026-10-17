@@ -43,6 +43,7 @@ class MainActivity : Activity() {
     private val preferences by lazy { getSharedPreferences("inventori", MODE_PRIVATE) }
     private val aiRecognizer: InventoryAiRecognizer = MockInventoryAiRecognizer()
     private var selectedMode = MODE_HOME
+    private var activeWorkspaceId: Long = 0
     private var formPhotoPath: String? = null
     private var formReceiptPath: String? = null
     private var formDocumentPath: String? = null
@@ -90,7 +91,12 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         database = InventoryDatabase(this)
         selectedMode = preferences.getString(KEY_MODE, MODE_HOME) ?: MODE_HOME
-        if (preferences.getBoolean(KEY_ONBOARDED, false)) showHome() else showOnboarding()
+        if (preferences.getBoolean(KEY_ONBOARDED, false)) {
+            initializeActiveWorkspace()
+            showHome()
+        } else {
+            showOnboarding()
+        }
     }
 
     override fun onDestroy() {
@@ -98,19 +104,90 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
+    private fun initializeActiveWorkspace() {
+        val legacy = database.workspaces().firstOrNull { it.type == InventoryDatabase.WORKSPACE_LEGACY }
+        if (legacy != null) {
+            database.adoptLegacyWorkspace(selectedMode, defaultWorkspaceName(selectedMode))
+        }
+        val available = database.workspaces()
+        val preferred = preferences.getLong(KEY_WORKSPACE_ID, -1L)
+        val chosen = available.firstOrNull { it.id == preferred }
+            ?: available.firstOrNull()
+            ?: database.createWorkspace(defaultWorkspaceName(selectedMode), selectedMode).let(database::workspace)
+        activeWorkspaceId = chosen?.id ?: error("Could not create workspace")
+        selectedMode = chosen?.type ?: selectedMode
+        preferences.edit()
+            .putLong(KEY_WORKSPACE_ID, activeWorkspaceId)
+            .putString(KEY_MODE, selectedMode)
+            .apply()
+    }
+
+    private fun activeWorkspace(): InventoryWorkspace {
+        val current = database.workspace(activeWorkspaceId)
+        if (current != null) return current
+        initializeActiveWorkspace()
+        return database.workspace(activeWorkspaceId) ?: error("Workspace unavailable")
+    }
+
     private fun showWorkspacePicker() {
-        val modes = listOf(MODE_HOME, MODE_MOVING, MODE_BUSINESS)
-        val titles = modes.map(::modeTitle).toTypedArray()
-        val selected = modes.indexOf(selectedMode).coerceAtLeast(0)
+        val workspaces = database.workspaces()
+        val labels = workspaces.map { it.name + " · " + modeTitle(it.type) } + "＋ New workspace"
         AlertDialog.Builder(this)
             .setTitle("Choose workspace")
-            .setSingleChoiceItems(titles, selected) { dialog, which ->
-                selectedMode = modes[which]
-                preferences.edit().putString(KEY_MODE, selectedMode).apply()
-                dialog.dismiss()
-                showHome()
+            .setItems(labels.toTypedArray()) { dialog, which ->
+                if (which < workspaces.size) {
+                    val workspace = workspaces[which]
+                    activeWorkspaceId = workspace.id
+                    selectedMode = workspace.type
+                    preferences.edit()
+                        .putLong(KEY_WORKSPACE_ID, workspace.id)
+                        .putString(KEY_MODE, workspace.type)
+                        .apply()
+                    dialog.dismiss()
+                    showHome()
+                } else {
+                    dialog.dismiss()
+                    showCreateWorkspaceDialog()
+                }
             }
             .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun showCreateWorkspaceDialog() {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(10), dp(22), 0)
+        }
+        val name = EditText(this).apply {
+            hint = "Workspace name"
+            setText(defaultWorkspaceName(selectedMode))
+            isSingleLine = true
+        }
+        val modes = listOf(MODE_HOME, MODE_MOVING, MODE_BUSINESS)
+        val modeSpinner = spinner(modes.map(::modeTitle))
+        modeSpinner.setSelection(modes.indexOf(selectedMode).coerceAtLeast(0))
+        container.addView(label("Name", 13, COLOR_MUTED, true))
+        container.addView(name, matchWrap())
+        container.addView(spacer(10))
+        container.addView(label("Type", 13, COLOR_MUTED, true))
+        container.addView(modeSpinner, matchWrap())
+        AlertDialog.Builder(this)
+            .setTitle("New workspace")
+            .setView(container)
+            .setNegativeButton("Cancel", null)
+            .setPositiveButton("Create") { _, _ ->
+                val type = modes[modeSpinner.selectedItemPosition]
+                val workspaceName = name.text.toString().trim().ifBlank { defaultWorkspaceName(type) }
+                val id = database.createWorkspace(workspaceName, type)
+                activeWorkspaceId = id
+                selectedMode = type
+                preferences.edit()
+                    .putLong(KEY_WORKSPACE_ID, id)
+                    .putString(KEY_MODE, type)
+                    .apply()
+                showHome()
+            }
             .show()
     }
 
@@ -147,16 +224,23 @@ class MainActivity : Activity() {
         body.addView(label("Works offline with no account. You can change this later.", 14, COLOR_MUTED))
         body.addView(spacer(20))
         body.addView(button("Get started", R.id.onboarding_continue, true) {
-            preferences.edit().putBoolean(KEY_ONBOARDED, true).putString(KEY_MODE, selectedMode).apply()
+            activeWorkspaceId = database.createWorkspace(defaultWorkspaceName(selectedMode), selectedMode)
+            preferences.edit()
+                .putBoolean(KEY_ONBOARDED, true)
+                .putString(KEY_MODE, selectedMode)
+                .putLong(KEY_WORKSPACE_ID, activeWorkspaceId)
+                .apply()
             showHome()
         }, matchWrap())
     }
 
     private fun showHome(searchQuery: String = "") {
+        val workspace = activeWorkspace()
+        selectedMode = workspace.type
         val modeTitle = modeTitle(selectedMode)
-        val body = screen(modeTitle, null, selectedTab = TAB_INVENTORY)
-        val allItems = database.items()
-        val allLocations = database.locations()
+        val body = screen(workspace.name, null, selectedTab = TAB_INVENTORY)
+        val allItems = database.items(activeWorkspaceId)
+        val allLocations = database.locations(activeWorkspaceId)
         val totalUnits = allItems.sumOf {
             if (it.itemType == InventoryItem.TYPE_UNIQUE) 1 else it.quantity.coerceAtLeast(0)
         }
@@ -186,7 +270,7 @@ class MainActivity : Activity() {
             body.addView(value, matchWrap())
         }
         body.addView(spacer(14))
-        body.addView(label("Workspace: " + modeTitle(selectedMode) + " · tap the workspace name under Inventori to switch.", 12, COLOR_MUTED))
+        body.addView(label("Workspace: " + workspace.name + " · " + modeTitle(selectedMode) + " · tap the name under Inventori to switch.", 12, COLOR_MUTED))
         body.addView(spacer(12))
 
         val searchBar = LinearLayout(this).apply {
@@ -306,7 +390,7 @@ class MainActivity : Activity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val query = s?.toString().orEmpty()
-                renderItems(results, database.searchItems(query), query)
+                renderItems(results, database.searchItems(activeWorkspaceId, query), query)
             }
             override fun afterTextChanged(s: Editable?) = Unit
         })
@@ -376,7 +460,7 @@ class MainActivity : Activity() {
         body.addView(spacer(16))
         body.addView(button("Add a location", R.id.locations_add_button, true, leadingIcon = R.drawable.ic_add) { showAddLocationForm() }, matchWrap())
         body.addView(spacer(14))
-        val locations = database.locations().sortedBy { database.locationPath(it.id).lowercase() }
+        val locations = database.locations(activeWorkspaceId).sortedBy { database.locationPath(it.id).lowercase() }
         if (locations.isEmpty()) {
             body.addView(emptyState(R.drawable.ic_location, "No locations yet", "Start with a home or business, then add rooms, storage areas, shelves, and boxes."), matchWrap())
         } else {
@@ -409,7 +493,7 @@ class MainActivity : Activity() {
         body.addView(typeSpinner, matchWrap())
         body.addView(spacer(8))
         body.addView(label("Inside", 13, COLOR_MUTED, true))
-        val parents = listOf<InventoryLocation?>(null) + database.locations()
+        val parents = listOf<InventoryLocation?>(null) + database.locations(activeWorkspaceId)
         val parentNames = listOf("No parent (top level)") + parents.drop(1).map {
             database.locationPath(it!!.id)
         }
@@ -425,7 +509,7 @@ class MainActivity : Activity() {
             }
             val type = typeValues[typeSpinner.selectedItemPosition]
             val parent = parents[parentSpinner.selectedItemPosition]
-            database.addLocation(locationName, type, parent?.id)
+            database.addLocation(activeWorkspaceId, locationName, type, parent?.id)
             showLocations()
         }, matchWrap())
     }
@@ -521,8 +605,9 @@ class MainActivity : Activity() {
         }
         val locations = locationOptions()
         val location = locations.getOrNull(formLocation.selectedItemPosition)?.first
-        val base = formExistingItem ?: InventoryItem()
+        val base = formExistingItem ?: InventoryItem(workspaceId = activeWorkspaceId)
         val item = base.copy(
+            workspaceId = activeWorkspaceId,
             itemType = type,
             name = name,
             photoPath = formPhotoPath,
@@ -552,6 +637,7 @@ class MainActivity : Activity() {
 
     private fun showItemDetail(id: Long) {
         val item = database.item(id) ?: return showHome()
+        if (item.workspaceId != activeWorkspaceId) return showHome()
         val body = screen(item.name, { showHome() })
         if (!item.photoPath.isNullOrBlank()) {
             val image = ImageView(this).apply {
@@ -701,7 +787,7 @@ class MainActivity : Activity() {
             body.addView(spacer(6))
         }
         body.addView(button("＋ Add another item", R.id.ai_add_draft) {
-            detectedItems.add(InventoryItem(name = "", category = "", photoPath = detectedItems.firstOrNull()?.photoPath))
+            detectedItems.add(InventoryItem(workspaceId = activeWorkspaceId, name = "", category = "", photoPath = detectedItems.firstOrNull()?.photoPath))
             showAiConfirmation()
         }, matchWrap())
         body.addView(spacer(10))
@@ -713,7 +799,7 @@ class MainActivity : Activity() {
         body.addView(button("Confirm and save " + detectedItems.size + " item(s)", R.id.ai_confirm_save, true) {
             val location = locations.getOrNull(detectedLocationSpinner.selectedItemPosition)?.first
             detectedItems.filter { it.name.isNotBlank() }.forEach { draft ->
-                database.saveItem(draft.copy(locationId = location))
+                database.saveItem(draft.copy(workspaceId = activeWorkspaceId, locationId = location))
             }
             toast("Confirmed items saved")
             showHome()
@@ -764,8 +850,8 @@ class MainActivity : Activity() {
 
     private fun showReports() {
         val body = screen("Reports", { showHome() }, selectedTab = TAB_REPORTS)
-        val total = database.items().size
-        val locationCount = database.locations().size
+        val total = database.items(activeWorkspaceId).size
+        val locationCount = database.locations(activeWorkspaceId).size
         val reportCard = card(COLOR_PRIMARY_CONTAINER).apply { setPadding(dp(22), dp(22), dp(22), dp(22)) }
         reportCard.addView(iconView(R.drawable.ic_reports, COLOR_ON_PRIMARY_CONTAINER, 34))
         reportCard.addView(spacer(12))
@@ -873,7 +959,7 @@ class MainActivity : Activity() {
                 val uri = data?.data ?: return
                 runCatching {
                     contentResolver.openOutputStream(uri)?.use { output ->
-                        InventoryPdfExporter.export(this, output, database.items(), database)
+                        InventoryPdfExporter.export(this, output, database.items(activeWorkspaceId), database)
                     } ?: error("Could not open the selected PDF location")
                 }.onSuccess {
                     toast("Inventory PDF exported")
@@ -965,7 +1051,7 @@ class MainActivity : Activity() {
     }
 
     private fun locationOptions(): List<Pair<Long?, String>> =
-        listOf(null to "No location") + database.locations()
+        listOf(null to "No location") + database.locations(activeWorkspaceId)
             .sortedBy { database.locationPath(it.id).lowercase() }
             .map { it.id to database.locationPath(it.id) }
 
@@ -998,8 +1084,10 @@ class MainActivity : Activity() {
         val heading = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         if (back == null) {
             heading.addView(label("Inventori", 21, COLOR_INK, true))
-            val subtitle = label(if (title == modeTitle(selectedMode)) title + " ▾" else title, 13, COLOR_MUTED, title == modeTitle(selectedMode))
-            if (title == modeTitle(selectedMode)) {
+            val workspaceTitle = runCatching { activeWorkspace().name }.getOrDefault(title)
+            val isWorkspaceHeader = title == workspaceTitle
+            val subtitle = label(if (isWorkspaceHeader) title + " ▾" else title, 13, COLOR_MUTED, isWorkspaceHeader)
+            if (isWorkspaceHeader) {
                 subtitle.isClickable = true
                 subtitle.isFocusable = true
                 subtitle.contentDescription = "Change workspace"
@@ -1275,6 +1363,12 @@ class MainActivity : Activity() {
         else -> "Home Inventory"
     }
 
+    private fun defaultWorkspaceName(mode: String): String = when (mode) {
+        MODE_MOVING -> "My Move"
+        MODE_BUSINESS -> "My Business"
+        else -> "My Home"
+    }
+
     private fun modeShortTitle(mode: String): String = when (mode) {
         MODE_MOVING -> "Moving"
         MODE_BUSINESS -> "Business"
@@ -1296,6 +1390,7 @@ class MainActivity : Activity() {
         private const val MODE_MOVING = "moving"
         private const val MODE_BUSINESS = "business"
         private const val KEY_MODE = "mode"
+        private const val KEY_WORKSPACE_ID = "workspace_id"
         private const val KEY_ONBOARDED = "onboarded"
         private const val REQUEST_ITEM_CAMERA = 1001
         private const val REQUEST_ITEM_GALLERY = 1002

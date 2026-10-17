@@ -1,14 +1,23 @@
 package com.inventori.android
 
+data class InventoryWorkspace(
+    val id: Long,
+    val name: String,
+    val type: String,
+    val createdAt: Long
+)
+
 data class InventoryLocation(
     val id: Long,
     val parentId: Long?,
     val name: String,
-    val type: String
+    val type: String,
+    val workspaceId: Long = 0
 )
 
 data class InventoryItem(
     val id: Long = 0,
+    val workspaceId: Long = 0,
     val itemType: String = TYPE_UNIQUE,
     val name: String = "",
     val photoPath: String? = null,

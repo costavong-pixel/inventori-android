@@ -50,3 +50,14 @@ V2 adds:
 - Identifier and optional GPS metadata in item details and PDF exports.
 
 Dedicated vendor-specific UHF RFID reader SDK integration is intentionally deferred. V2 stores RFID/EPC identifiers without locking Inventori to one hardware brand.
+
+
+## V2.1 workspaces
+
+Inventori now uses a real hierarchy:
+
+`Account (future) → Workspace → Location → Item`
+
+Each workspace has its own type (Home Inventory, Moving / Packing, or Small Business), its own locations, and its own items. A customer can create multiple workspaces of any type and switch between them from the Inventori header.
+
+The V2 local database is migrated in place. Existing items and locations are preserved in one imported workspace, which adopts the user's previously selected mode on first V2.1 launch. Locations are not artificially limited by the local data model.

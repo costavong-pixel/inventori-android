@@ -104,6 +104,27 @@ class InventoryWorkflowInstrumentedTest {
     }
 
     @Test
+    fun workspacesKeepItemsAndLocationsSeparated() {
+        resetLocalState()
+        val db = InventoryDatabase(context)
+        val homeWorkspace = db.createWorkspace("Main Home", "home")
+        val businessWorkspace = db.createWorkspace("Shop", "business")
+        val homeRoom = db.addLocation(homeWorkspace, "Bedroom", "room", null)
+        val businessShelf = db.addLocation(businessWorkspace, "Shelf A", "shelf", null)
+
+        db.saveItem(InventoryItem(workspaceId = homeWorkspace, name = "Laptop", locationId = homeRoom))
+        db.saveItem(InventoryItem(workspaceId = businessWorkspace, name = "Stock box", locationId = businessShelf))
+
+        assertEquals(listOf("Laptop"), db.items(homeWorkspace).map { it.name })
+        assertEquals(listOf("Stock box"), db.items(businessWorkspace).map { it.name })
+        assertEquals(listOf("Bedroom"), db.locations(homeWorkspace).map { it.name })
+        assertEquals(listOf("Shelf A"), db.locations(businessWorkspace).map { it.name })
+        assertTrue(db.searchItems(homeWorkspace, "Stock box").isEmpty())
+        assertTrue(db.searchItems(businessWorkspace, "Laptop").isEmpty())
+        db.close()
+    }
+
+    @Test
     fun multipleMockDraftsCanBeEditedAddedAndRemovedBeforeSaving() {
         resetLocalState()
         val scenario = ActivityScenario.launch(MainActivity::class.java)
