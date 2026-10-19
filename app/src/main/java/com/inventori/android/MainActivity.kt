@@ -673,7 +673,7 @@ class MainActivity : Activity() {
             info.addView(spacer(4))
         }
         body.addView(info, matchWrap())
-        body.addView(spacer(8))
+        body.addView(spacer(10))
         if (item.itemType == InventoryItem.TYPE_UNIQUE) {
             when (item.status) {
                 InventoryItem.STATUS_CHECKED_OUT -> body.addView(button("Mark returned", primary = true) {
@@ -685,6 +685,7 @@ class MainActivity : Activity() {
                     showItemDetail(id)
                 }, matchWrap())
             }
+            body.addView(spacer(10))
         } else {
             val qty = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             qty.addView(button("−1") { database.setQuantity(id, item.quantity - 1); showItemDetail(id) },
@@ -692,10 +693,14 @@ class MainActivity : Activity() {
             qty.addView(button("+1") { database.setQuantity(id, item.quantity + 1); showItemDetail(id) },
                 LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(5) })
             body.addView(qty)
+            body.addView(spacer(10))
             body.addView(button("Edit quantity / item", primary = true) { showItemForm(item) }, matchWrap())
+            body.addView(spacer(10))
         }
         body.addView(button("Move location") { showMoveDialog(item) }, matchWrap())
+        body.addView(spacer(10))
         body.addView(button("Edit item") { showItemForm(item) }, matchWrap())
+        body.addView(spacer(10))
         body.addView(button("Delete item") {
             AlertDialog.Builder(this)
                 .setTitle("Delete item?")
