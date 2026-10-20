@@ -1,3 +1,6 @@
+val inventoriAiBackendUrl = providers.gradleProperty("INVENTORI_AI_BACKEND_URL").orElse("").get()
+val escapedInventoriAiBackendUrl = inventoriAiBackendUrl.replace("\\", "\\\\").replace("\"", "\\\"")
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -11,8 +14,9 @@ android {
         applicationId = "com.inventori.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.1"
+        versionCode = 4
+        versionName = "2.2"
+        buildConfigField("String", "AI_BACKEND_URL", "\"" + escapedInventoriAiBackendUrl + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -25,6 +29,9 @@ android {
     }
     testOptions {
         animationsDisabled = true
+    }
+    buildFeatures {
+        buildConfig = true
     }
 }
 

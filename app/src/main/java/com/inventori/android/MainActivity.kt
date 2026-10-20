@@ -41,7 +41,10 @@ import java.util.Locale
 class MainActivity : Activity() {
     private lateinit var database: InventoryDatabase
     private val preferences by lazy { getSharedPreferences("inventori", MODE_PRIVATE) }
-    private val aiRecognizer: InventoryAiRecognizer = MockInventoryAiRecognizer()
+    private val aiRecognizer by lazy {
+        BackendInventoryAiRecognizer(applicationContext, BuildConfig.AI_BACKEND_URL)
+    }
+    private var lastAiResult: AiRecognitionResult? = null
     private var selectedMode = MODE_HOME
     private var activeWorkspaceId: Long = 0
     private var formPhotoPath: String? = null
@@ -358,7 +361,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
         }
         body.addView(results, matchWrap())
-        renderItems(results, database.searchItems(searchQuery), searchQuery)
+        renderItems(results, database.searchItems(activeWorkspaceId, searchQuery), searchQuery)
         body.addView(spacer(18))
         val locationHeading = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -733,15 +736,24 @@ class MainActivity : Activity() {
         body.addView(label("Start with a photo", 27, COLOR_INK, true))
         body.addView(spacer(6))
         body.addView(label("Choose an image and review every suggested item before it is saved.", 15, COLOR_MUTED))
+        body.addView(spacer(8))
+        val knownRemaining = getSharedPreferences("inventori_ai", MODE_PRIVATE)
+            .getInt(BackendInventoryAiRecognizer.KEY_LAST_REMAINING, -1)
+        val backendStatus = when {
+            !aiRecognizer.configured -> "Real AI backend is not configured in this build. Mock preview is still available."
+            knownRemaining >= 0 -> "Real AI ready · " + knownRemaining + " scans remaining this month."
+            else -> "Real AI ready · successful scans are metered by the backend."
+        }
+        body.addView(label(backendStatus, 13, if (aiRecognizer.configured) COLOR_PRIMARY else COLOR_MUTED))
         body.addView(spacer(20))
         body.addView(button("Take a photo", leadingIcon = R.drawable.ic_scan) { startCamera(REQUEST_AI_CAMERA) }, matchWrap())
         body.addView(spacer(8))
         body.addView(button("Choose from gallery", leadingIcon = R.drawable.ic_image) { startGallery(REQUEST_AI_GALLERY) }, matchWrap())
         body.addView(spacer(16))
         val mock = card(COLOR_SURFACE_VARIANT)
-        mock.addView(label("Preview the review flow", 16, COLOR_INK, true))
+        mock.addView(label("Local preview", 16, COLOR_INK, true))
         mock.addView(spacer(4))
-        mock.addView(label("The V1 recognizer is a local mock. Your photos stay on this device.", 13, COLOR_MUTED))
+        mock.addView(label("Use this deterministic sample to test the review flow without consuming an AI scan.", 13, COLOR_MUTED))
         mock.addView(spacer(12))
         mock.addView(button("Use mock sample", R.id.ai_mock_sample, true, leadingIcon = R.drawable.ic_inventory) {
             runAiRecognition(null, count)
@@ -752,20 +764,53 @@ class MainActivity : Activity() {
 
     private fun runAiRecognition(photoPath: String?, count: Int) {
         val evidence = if (photoPath.isNullOrBlank()) null else currentEvidenceLocation()
-        detectedItems = aiRecognizer.recognize(photoPath, count).map { item ->
-            if (evidence == null) item else item.copy(
-                evidenceLatitude = evidence.latitude,
-                evidenceLongitude = evidence.longitude,
-                evidenceAccuracyMeters = evidence.accuracy,
-                evidenceCapturedAt = evidence.time.takeIf { it > 0 } ?: System.currentTimeMillis()
-            )
-        }.toMutableList()
-        showAiConfirmation()
+        val loading = screen("Scan", { showHome() }, selectedTab = TAB_SCAN)
+        loading.addView(label(if (photoPath.isNullOrBlank()) "Loading preview…" else "Analyzing photo…", 24, COLOR_INK, true))
+        loading.addView(spacer(8))
+        loading.addView(label("Inventori will always show the result for review before anything is saved.", 14, COLOR_MUTED))
+        Thread {
+            runCatching { aiRecognizer.recognize(photoPath, count, selectedMode) }
+                .onSuccess { result ->
+                    runOnUiThread {
+                        lastAiResult = result
+                        detectedItems = result.items.map { item ->
+                            val withWorkspace = item.copy(workspaceId = activeWorkspaceId)
+                            if (evidence == null) withWorkspace else withWorkspace.copy(
+                                evidenceLatitude = evidence.latitude,
+                                evidenceLongitude = evidence.longitude,
+                                evidenceAccuracyMeters = evidence.accuracy,
+                                evidenceCapturedAt = evidence.time.takeIf { it > 0 } ?: System.currentTimeMillis()
+                            )
+                        }.toMutableList()
+                        if (detectedItems.isEmpty()) {
+                            toast("No inventory item was confidently detected. Try another photo or add it manually.")
+                            chooseAiInput(count)
+                        } else {
+                            showAiConfirmation()
+                        }
+                    }
+                }
+                .onFailure { error ->
+                    runOnUiThread {
+                        toast(error.message ?: "AI scan failed")
+                        chooseAiInput(count)
+                    }
+                }
+        }.start()
     }
 
     private fun showAiConfirmation() {
         val body = screen("Review AI draft", { showHome() })
-        body.addView(label("Mock preview · check every field before saving. You can edit, remove, or add detected items.", 14, COLOR_MUTED))
+        val aiSummary = lastAiResult?.let { result ->
+            if (result.source == BackendInventoryAiRecognizer.SOURCE_BACKEND) {
+                val remaining = result.scansRemaining?.let { " · " + it + " scans remaining" }.orEmpty()
+                val cost = result.estimatedCostUsd?.let { " · est. API $" + String.format(Locale.US, "%.5f", it) }.orEmpty()
+                "Real AI result" + remaining + cost
+            } else {
+                "Local preview · no AI scan charged"
+            }
+        } ?: "Review every field before saving."
+        body.addView(label(aiSummary + " · You can edit, remove, or add detected items.", 14, COLOR_MUTED))
         body.addView(spacer(10))
         detectedItems.forEachIndexed { index, item ->
             val draft = card()
@@ -866,6 +911,19 @@ class MainActivity : Activity() {
         body.addView(reportCard, matchWrap())
         body.addView(spacer(16))
         body.addView(label("$total inventory entries  ·  $locationCount locations", 14, COLOR_MUTED))
+        val remaining = getSharedPreferences("inventori_ai", MODE_PRIVATE)
+            .getInt(BackendInventoryAiRecognizer.KEY_LAST_REMAINING, -1)
+        body.addView(spacer(8))
+        body.addView(label(
+            if (aiRecognizer.configured) {
+                if (remaining >= 0) "AI backend connected · " + remaining + " scans remaining"
+                else "AI backend configured · scan usage will appear after the first request"
+            } else {
+                "AI backend not configured in this APK · local mock remains available"
+            },
+            13,
+            if (aiRecognizer.configured) COLOR_PRIMARY else COLOR_MUTED
+        ))
         body.addView(spacer(14))
         body.addView(button("Export inventory PDF", R.id.home_export_pdf, true, leadingIcon = R.drawable.ic_download) {
             requestPdfExport()

@@ -47,6 +47,7 @@ class InventoryWorkflowInstrumentedTest {
             backButton.performClick()
         }
         device.waitForIdle()
+        assertTrue(device.wait(Until.hasObject(By.res(packageName, "home_add_item")), 5_000))
         tapId(device, "home_add_item")
         scenario.onActivity { activity ->
             activity.findViewById<EditText>(R.id.item_name).setText("UI Test Camera")
@@ -130,7 +131,9 @@ class InventoryWorkflowInstrumentedTest {
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         val device = UiDevice.getInstance(instrumentation)
         continueOnboarding(device)
+        assertTrue(device.wait(Until.hasObject(By.res(packageName, "ai_multiple")), 5_000))
         tapId(device, "ai_multiple")
+        assertTrue(device.wait(Until.hasObject(By.res(packageName, "ai_mock_sample")), 5_000))
         tapId(device, "ai_mock_sample")
         assertTrue(device.hasObject(By.text("Detected power drill")))
         assertTrue(device.hasObject(By.text("Detected battery pack")))

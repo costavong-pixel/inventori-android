@@ -20,6 +20,9 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7
 
+      - name: Run backend unit tests
+        run: python3 -m unittest discover -s backend -p "test_*.py"
+
       - name: Set up Java
         uses: actions/setup-java@v6
         with:
@@ -34,6 +37,8 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Build debug APK
+        env:
+          ORG_GRADLE_PROJECT_INVENTORI_AI_BACKEND_URL: ${{ vars.INVENTORI_AI_BACKEND_URL }}
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug testDebugUnitTest

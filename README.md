@@ -61,3 +61,18 @@ Inventori now uses a real hierarchy:
 Each workspace has its own type (Home Inventory, Moving / Packing, or Small Business), its own locations, and its own items. A customer can create multiple workspaces of any type and switch between them from the Inventori header.
 
 The V2 local database is migrated in place. Existing items and locations are preserved in one imported workspace, which adopts the user's previously selected mode on first V2.1 launch. Locations are not artificially limited by the local data model.
+
+
+## V2.2 real AI recognition
+
+V2.2 adds a server-side vision path and successful-scan metering.
+
+- Android never contains the OpenAI API key.
+- A configured HTTPS backend analyzes one photo for one or many inventory items.
+- The user still reviews every detected item before saving.
+- One successful photo analysis counts as one scan even when multiple items are returned.
+- Failed provider requests and zero-item detections do not consume a scan.
+- The app displays the last known scans remaining and estimated provider cost for a successful request.
+- With no backend URL configured, the deterministic local preview remains available.
+
+See `backend/README.md` for deployment and build instructions.
