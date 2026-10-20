@@ -1,0 +1,24 @@
+[Unit]
+Description=Inventori AI Backend
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=inventori
+Group=inventori
+WorkingDirectory=/opt/inventori-ai
+EnvironmentFile=/etc/inventori-ai.env
+ExecStart=/usr/bin/python3 /opt/inventori-ai/inventori_server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/inventori
+MemoryDenyWriteExecute=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
