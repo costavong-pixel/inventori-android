@@ -34,11 +34,10 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Build debug APK
-        env:
-          ORG_GRADLE_PROJECT_INVENTORI_AI_BACKEND_URL: ${{ vars.INVENTORI_AI_BACKEND_URL || 'https://inventori-api.barndai.com' }}
         run: |
           chmod +x ./gradlew
-          ./gradlew assembleDebug testDebugUnitTest
+          ./gradlew assembleDebug testDebugUnitTest -PINVENTORI_AI_BACKEND_URL=https://inventori-api.barndai.com
+          grep -R -F 'https://inventori-api.barndai.com' app/build/generated/source/buildConfig/debug/ || { echo "ERROR: Live AI backend missing from APK build configuration"; exit 1; }
 
       - name: Run Android emulator workflow checks
         uses: reactivecircus/android-emulator-runner@v2
