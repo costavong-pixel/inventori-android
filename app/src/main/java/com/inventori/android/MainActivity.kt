@@ -740,7 +740,7 @@ class MainActivity : Activity() {
         val knownRemaining = getSharedPreferences("inventori_ai", MODE_PRIVATE)
             .getInt(BackendInventoryAiRecognizer.KEY_LAST_REMAINING, -1)
         val backendStatus = when {
-            !aiRecognizer.configured -> "Real AI backend is not configured in this build. Mock preview is still available."
+            !aiRecognizer.configured -> "Real AI unavailable: this APK has no backend URL. Photo scanning will show an error, not fake results."
             knownRemaining >= 0 -> "Real AI ready · " + knownRemaining + " scans remaining this month."
             else -> "Real AI ready · successful scans are metered by the backend."
         }
@@ -919,7 +919,7 @@ class MainActivity : Activity() {
                 if (remaining >= 0) "AI backend connected · " + remaining + " scans remaining"
                 else "AI backend configured · scan usage will appear after the first request"
             } else {
-                "AI backend not configured in this APK · local mock remains available"
+                "AI backend missing · real photo scanning disabled"
             },
             13,
             if (aiRecognizer.configured) COLOR_PRIMARY else COLOR_MUTED
