@@ -14,8 +14,8 @@ android {
         applicationId = "com.inventori.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "2.2"
+        versionCode = 5
+        versionName = "2.2.1"
         buildConfigField("String", "AI_BACKEND_URL", "\"" + escapedInventoriAiBackendUrl + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
