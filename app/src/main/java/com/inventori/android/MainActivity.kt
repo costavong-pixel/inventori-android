@@ -1166,6 +1166,12 @@ class MainActivity : Activity() {
             heading.addView(titleLabel)
         }
         header.addView(heading, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        header.addView(label("v" + BuildConfig.VERSION_NAME + " (" + BuildConfig.VERSION_CODE + ")", 10, COLOR_MUTED),
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.TOP
+                marginStart = dp(6)
+                topMargin = dp(5)
+            })
         outer.addView(header, matchWrap())
         ViewCompat.setOnApplyWindowInsetsListener(outer) { _, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
