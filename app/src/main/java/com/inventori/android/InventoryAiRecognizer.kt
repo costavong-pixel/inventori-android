@@ -66,9 +66,10 @@ class BackendInventoryAiRecognizer(
     val configured: Boolean get() = baseUrl.isNotBlank()
 
     override fun recognize(photoPath: String?, expectedItems: Int, workspaceType: String): AiRecognitionResult {
-        if (photoPath.isNullOrBlank() || !configured) {
+        if (photoPath.isNullOrBlank()) {
             return fallback.recognize(photoPath, expectedItems, workspaceType)
         }
+        check(configured) { "Real AI is not configured in this APK. Install a build with the Inventori API URL." }
         requireSecureBackend()
         val installId = preferences.getString(KEY_INSTALL_ID, null)
             ?: UUID.randomUUID().toString().also {
