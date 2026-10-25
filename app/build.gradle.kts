@@ -1,4 +1,4 @@
-val inventoriAiBackendUrl = providers.gradleProperty("INVENTORI_AI_BACKEND_URL").orElse("").get()
+val inventoriAiBackendUrl = providers.gradleProperty("INVENTORI_AI_BACKEND_URL").orElse("https://inventori-api.barndai.com").get()
 val escapedInventoriAiBackendUrl = inventoriAiBackendUrl.replace("\\", "\\\\").replace("\"", "\\\"")
 
 plugins {
@@ -14,8 +14,8 @@ android {
         applicationId = "com.inventori.android"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "2.2.1"
+        versionCode = 6
+        versionName = "2.2.2"
         buildConfigField("String", "AI_BACKEND_URL", "\"" + escapedInventoriAiBackendUrl + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
