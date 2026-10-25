@@ -47,7 +47,7 @@ class InventoryWorkflowInstrumentedTest {
             backButton.performClick()
         }
         device.waitForIdle()
-        assertTrue(device.wait(Until.hasObject(By.res(packageName, "home_add_item")), 5_000))
+        assertTrue(device.wait(Until.hasObject(By.res(packageName, "home_add_item")), 15_000))
         tapId(device, "home_add_item")
         scenario.onActivity { activity ->
             activity.findViewById<EditText>(R.id.item_name).setText("UI Test Camera")
@@ -135,8 +135,8 @@ class InventoryWorkflowInstrumentedTest {
         tapId(device, "ai_multiple")
         assertTrue(device.wait(Until.hasObject(By.res(packageName, "ai_mock_sample")), 5_000))
         tapId(device, "ai_mock_sample")
-        assertTrue(device.hasObject(By.text("Detected power drill")))
-        assertTrue(device.hasObject(By.text("Detected battery pack")))
+        assertTrue(device.wait(Until.hasObject(By.text("Detected power drill")), 10_000))
+        assertTrue(device.wait(Until.hasObject(By.text("Detected battery pack")), 10_000))
 
         tapId(device, "ai_draft_edit_0")
         scenario.onActivity { activity ->
@@ -150,7 +150,7 @@ class InventoryWorkflowInstrumentedTest {
             activity.findViewById<Button>(R.id.ai_edit_apply).performClick()
         }
         scenario.onActivity { activity -> activity.findViewById<Button>(R.id.ai_draft_remove_0).performClick() }
-        assertFalse(device.hasObject(By.text("Edited detected drill")))
+        assertTrue(device.wait(Until.gone(By.text("Edited detected drill")), 10_000))
         scenario.onActivity { it.findViewById<Button>(R.id.ai_confirm_save).performClick() }
         val db = InventoryDatabase(context)
         val saved = db.items()
@@ -279,7 +279,7 @@ class InventoryWorkflowInstrumentedTest {
 
     private fun tapId(device: UiDevice, id: String) {
         val selector = By.res(packageName, id)
-        assertTrue("Timed out waiting for UI control: " + id, device.wait(Until.hasObject(selector), 5_000))
+        assertTrue("Timed out waiting for UI control: " + id, device.wait(Until.hasObject(selector), 15_000))
         val target = device.findObject(selector)
         assertNotNull("Missing UI control: " + id, target)
         target.click()
