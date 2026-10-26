@@ -4,6 +4,8 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import java.io.File
+import java.security.MessageDigest
+import java.util.zip.ZipFile
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
@@ -15,27 +17,69 @@ object InventoriBackup {
     private const val MAX_TOTAL_BYTES = 256L * 1024 * 1024
 
     fun export(context: Context, uri: Uri, database: InventoryDatabase) {
-        // Close SQLite before snapshotting to ensure committed transactions are included.
+        // Item photos from a multi-object scan share one path: archive each image only once.
+        val referenced = database.items().flatMap { listOfNotNull(it.photoPath, it.receiptPath, it.documentPath) }
+            .map(::File).filter { it.isFile }.distinctBy { it.canonicalPath }
+        val names = mutableSetOf<String>()
+        for (file in referenced) require(names.add(file.name)) { "Media filename collision: " + file.name }
         database.close()
         val dbFile = context.getDatabasePath(DB)
         require(dbFile.isFile) { "No inventory database found" }
-        context.contentResolver.openOutputStream(uri)?.use { output ->
+        val hashes = JSONObject()
+        context.contentResolver.openOutputStream(uri, "wt")?.use { output ->
             ZipOutputStream(output).use { zip ->
                 fun add(file: File, name: String) {
+                    val digest = MessageDigest.getInstance("SHA-256")
                     zip.putNextEntry(ZipEntry(name))
-                    file.inputStream().use { it.copyTo(zip) }
+                    file.inputStream().use { input ->
+                        val buffer = ByteArray(8192)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            digest.update(buffer, 0, n)
+                            zip.write(buffer, 0, n)
+                        }
+                    }
+                    zip.closeEntry()
+                    hashes.put(name, digest.digest().joinToString("") { "%02x".format(it) })
+                }
+                add(dbFile, DB)
+                referenced.forEach { add(it, "media/" + it.name) }
+                zip.putNextEntry(ZipEntry("manifest.json"))
+                zip.write(JSONObject()
+                    .put("format", "inventori-backup")
+                    .put("version", 1)
+                    .put("created_at", System.currentTimeMillis())
+                    .put("files_sha256", hashes)
+                    .toString().toByteArray(Charsets.UTF_8))
+                zip.closeEntry()
+            }
+        } ?: error("Could not open ZIP backup destination")
+        // Reopen the Google Drive document rather than trusting that a write succeeded.
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            ZipInputStream(stream).use { zip ->
+                val seen = mutableSetOf<String>()
+                val validated = JSONObject()
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    require(seen.add(entry.name)) { "Duplicate entry in ZIP" }
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    val buffer = ByteArray(8192)
+                    while (true) {
+                        val count = zip.read(buffer)
+                        if (count < 0) break
+                        digest.update(buffer, 0, count)
+                    }
+                    if (entry.name != "manifest.json") {
+                        validated.put(entry.name, digest.digest().joinToString("") { "%02x".format(it) })
+                    }
                     zip.closeEntry()
                 }
-                zip.putNextEntry(ZipEntry("manifest.json"))
-                zip.write(JSONObject().put("format", "inventori-backup").put("version", 1)
-                    .put("created_at", System.currentTimeMillis()).toString().toByteArray())
-                zip.closeEntry()
-                add(dbFile, DB)
-                File(context.filesDir, "media").listFiles()?.filter { it.isFile }?.forEach {
-                    add(it, "media/" + it.name)
-                }
+                require("inventori.db" in seen && "manifest.json" in seen) { "ZIP backup incomplete" }
+                require(seen.size == referenced.size + 2) { "Backup file count mismatch" }
+                require(validated.toString() == hashes.toString()) { "Backup checksum mismatch" }
             }
-        } ?: error("Could not open backup destination")
+        } ?: error("Cannot reopen backup from selected location for validation")
     }
 
     /** Restore replaces local data. Caller must obtain explicit destructive confirmation. */
