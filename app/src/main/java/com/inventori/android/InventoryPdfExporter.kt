@@ -9,6 +9,8 @@ import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import java.io.OutputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Date
@@ -55,6 +57,7 @@ object InventoryPdfExporter {
             compareBy<InventoryItem> { database.locationPath(it.locationId).lowercase() }
                 .thenBy { it.name.lowercase() }
         )
+        val renderedPhotos = mutableSetOf<String>()
         var pageNumber = 1
         var page = document.startPage(PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, pageNumber).create())
         var canvas = page.canvas
@@ -126,12 +129,18 @@ object InventoryPdfExporter {
                 drawWrapped(canvas, item.notes, textX + 34f, textY, textRight - textX - 34f, bodyPaint, 11f, 2)
             }
 
-            val bitmap = item.photoPath?.let { pathValue ->
-                runCatching { BitmapFactory.decodeFile(pathValue) }.getOrNull()
-            }
+            // A group scan can reference the same original photo for many items.
+            // Render it only once per report, and downsample before handing it to PdfDocument.
+            val photoPath = item.photoPath?.takeIf { File(it).isFile }
+            val isSharedPhoto = photoPath != null && !renderedPhotos.add(photoPath)
+            val bitmap = if (photoPath != null && !isSharedPhoto) {
+                runCatching { reportThumbnail(photoPath) }.getOrNull()
+            } else null
             if (bitmap != null) {
                 drawThumbnail(canvas, bitmap, PAGE_WIDTH - MARGIN - 69f, y + 24f, 56f, 56f)
                 if (!bitmap.isRecycled) bitmap.recycle()
+            } else if (isSharedPhoto) {
+                canvas.drawText("Shared photo", PAGE_WIDTH - MARGIN - 76f, y + 54f, mutedPaint)
             } else {
                 val photoBox = RectF(PAGE_WIDTH - MARGIN - 69f, y + 24f, PAGE_WIDTH - MARGIN - 13f, y + 80f)
                 canvas.drawRoundRect(photoBox, 4f, 4f, borderPaint)
@@ -142,6 +151,21 @@ object InventoryPdfExporter {
         document.finishPage(page)
         document.writeTo(output)
         document.close()
+    }
+
+    private fun reportThumbnail(path: String): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeFile(path, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / sample > 360 || bounds.outHeight / sample > 360) sample *= 2
+        val decoded = BitmapFactory.decodeFile(path, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
+        // Force JPEG encoding so PDF never embeds an original large PNG/ARGB bitmap.
+        val bytes = ByteArrayOutputStream()
+        decoded.compress(Bitmap.CompressFormat.JPEG, 76, bytes)
+        decoded.recycle()
+        return BitmapFactory.decodeByteArray(bytes.toByteArray(), 0, bytes.size())
     }
 
     private fun drawThumbnail(canvas: android.graphics.Canvas, bitmap: Bitmap, left: Float, top: Float, width: Float, height: Float) {
