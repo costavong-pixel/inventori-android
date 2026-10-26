@@ -1045,10 +1045,28 @@ class MainActivity : Activity() {
             }
             REQUEST_BACKUP_EXPORT -> {
                 val uri = data?.data ?: return
-                runCatching { InventoriBackup.export(this, uri, database) }
-                    .onSuccess { toast("Backup saved to the selected location") }
-                    .onFailure { toast("Backup failed: " + (it.message ?: "unknown error")) }
-                database = InventoryDatabase(this)
+                val progress = AlertDialog.Builder(this)
+                    .setTitle("Saving inventory backup")
+                    .setMessage("Exporting inventory and photos. Keep Inventori open until saving finishes.")
+                    .setCancelable(false)
+                    .create()
+                progress.show()
+                Thread {
+                    val result = runCatching { InventoriBackup.export(applicationContext, uri, database) }
+                    runOnUiThread {
+                        database = InventoryDatabase(this)
+                        progress.dismiss()
+                        result.onSuccess {
+                            toast("Backup saved to the selected location")
+                        }.onFailure {
+                            AlertDialog.Builder(this)
+                                .setTitle("Backup failed")
+                                .setMessage(it.message ?: "Unable to save backup")
+                                .setPositiveButton("OK", null)
+                                .show()
+                        }
+                    }
+                }.start()
             }
             REQUEST_BACKUP_RESTORE -> {
                 val uri = data?.data ?: return
