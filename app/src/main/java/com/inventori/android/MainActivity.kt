@@ -949,6 +949,31 @@ class MainActivity : Activity() {
             }, matchWrap())
             body.addView(gpsCard, matchWrap())
         }
+        body.addView(spacer(18))
+        val backupCard = card(COLOR_SURFACE_VARIANT)
+        backupCard.addView(label("Backup & restore · V2.3", 17, COLOR_INK, true))
+        backupCard.addView(spacer(4))
+        backupCard.addView(label("Save all workspaces, items, photos and documents to a ZIP backup. Choose Google Drive in the Android file picker to store it in the cloud. Backup is manual; there is no automatic sync or Google sign-in yet.", 13, COLOR_MUTED))
+        backupCard.addView(spacer(10))
+        backupCard.addView(button("Create backup", leadingIcon = R.drawable.ic_download) {
+            val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/zip"
+                putExtra(Intent.EXTRA_TITLE, "inventori-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date()) + ".zip")
+            }
+            startActivityForResult(intent, REQUEST_BACKUP_EXPORT)
+        }, matchWrap())
+        backupCard.addView(spacer(8))
+        backupCard.addView(button("Restore from backup") {
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/zip"
+            }
+            startActivityForResult(intent, REQUEST_BACKUP_RESTORE)
+        }, matchWrap())
+        backupCard.addView(spacer(7))
+        backupCard.addView(label("Warning: restoring replaces all current local workspaces and inventory. Keep a separate backup first.", 12, COLOR_MUTED))
+        body.addView(backupCard, matchWrap())
         body.addView(spacer(10))
         body.addView(label("Values are estimates you entered. GPS is optional evidence metadata. The report does not guarantee an insurance claim.", 13, COLOR_MUTED))
     }
@@ -1017,6 +1042,30 @@ class MainActivity : Activity() {
             REQUEST_DOCUMENT -> {
                 formDocumentPath = data?.data?.let { copyUriIntoPrivateFiles(it, "document") }
                 documentStatus?.text = if (formDocumentPath == null) "Appraisal / document: not attached" else "Appraisal / document: attached"
+            }
+            REQUEST_BACKUP_EXPORT -> {
+                val uri = data?.data ?: return
+                runCatching { InventoriBackup.export(this, uri, database) }
+                    .onSuccess { toast("Backup saved to the selected location") }
+                    .onFailure { toast("Backup failed: " + (it.message ?: "unknown error")) }
+                database = InventoryDatabase(this)
+            }
+            REQUEST_BACKUP_RESTORE -> {
+                val uri = data?.data ?: return
+                AlertDialog.Builder(this)
+                    .setTitle("Replace all local inventory?")
+                    .setMessage("Restoring this backup removes current local workspaces, items, and locations. Create a backup of your existing inventory first. Continue?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Restore") { _, _ ->
+                        val result = runCatching { InventoriBackup.restore(this, uri, database) }
+                        database = InventoryDatabase(this)
+                        result.onSuccess {
+                            preferences.edit().remove(KEY_WORKSPACE_ID).apply()
+                            initializeActiveWorkspace()
+                            toast("Backup restored")
+                            showHome()
+                        }.onFailure { toast("Restore failed: " + (it.message ?: "unknown error")) }
+                    }.show()
             }
             REQUEST_EXPORT_PDF -> {
                 val uri = data?.data ?: return
@@ -1468,6 +1517,8 @@ class MainActivity : Activity() {
         private const val REQUEST_RECEIPT = 1005
         private const val REQUEST_DOCUMENT = 1006
         private const val REQUEST_EXPORT_PDF = 1007
+        private const val REQUEST_BACKUP_EXPORT = 1009
+        private const val REQUEST_BACKUP_RESTORE = 1010
         private const val REQUEST_EVIDENCE_LOCATION_PERMISSION = 1008
         private const val KEY_EVIDENCE_GPS = "evidence_gps"
         private const val TAB_INVENTORY = "inventory"
