@@ -959,6 +959,7 @@ class MainActivity : Activity() {
             val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                 addCategory(Intent.CATEGORY_OPENABLE)
                 type = "application/zip"
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 putExtra(Intent.EXTRA_TITLE, "inventori-backup-" + java.text.SimpleDateFormat("yyyy-MM-dd", Locale.US).format(java.util.Date()) + ".zip")
             }
             startActivityForResult(intent, REQUEST_BACKUP_EXPORT)
@@ -1045,8 +1046,24 @@ class MainActivity : Activity() {
             }
             REQUEST_BACKUP_EXPORT -> {
                 val uri = data?.data ?: return
+                // A document provider can return a PDF target despite a ZIP request.
+                // Never silently write a backup to a PDF-labelled document.
+                val selectedName = runCatching {
+                    contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)
+                        ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+                }.getOrNull().orEmpty()
+                val selectedMime = runCatching { contentResolver.getType(uri) }.getOrNull().orEmpty()
+                if (selectedName.endsWith(".pdf", ignoreCase = true) ||
+                    selectedMime.equals("application/pdf", ignoreCase = true)) {
+                    AlertDialog.Builder(this)
+                        .setTitle("Wrong backup file type")
+                        .setMessage("The destination is a PDF ($selectedName), not a ZIP. No backup was written. Choose BACK UP INVENTORY (ZIP) again and save to a new .zip file.")
+                        .setPositiveButton("OK", null)
+                        .show()
+                    return
+                }
                 val progress = AlertDialog.Builder(this)
-                    .setTitle("Saving inventory backup")
+                    .setTitle("Saving inventory ZIP backup")
                     .setMessage("Exporting inventory and photos. Keep Inventori open until saving finishes.")
                     .setCancelable(false)
                     .create()
@@ -1057,7 +1074,11 @@ class MainActivity : Activity() {
                         database = InventoryDatabase(this)
                         progress.dismiss()
                         result.onSuccess {
-                            toast("Backup saved to the selected location")
+                            AlertDialog.Builder(this)
+                                .setTitle("ZIP backup verified")
+                                .setMessage("Saved and rechecked the inventory ZIP archive. File: " + selectedName.ifBlank { uri.lastPathSegment.orEmpty() })
+                                .setPositiveButton("OK", null)
+                                .show()
                         }.onFailure {
                             AlertDialog.Builder(this)
                                 .setTitle("Backup failed")
