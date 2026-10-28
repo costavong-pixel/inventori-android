@@ -49,6 +49,17 @@ jobs:
           disable-animations: true
           script: ./gradlew connectedDebugAndroidTest
 
+      - name: Upload emulator test diagnostics
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: inventori-emulator-test-diagnostics
+          path: |
+            app/build/outputs/androidTest-results/connected/
+            app/build/reports/androidTests/connected/
+          if-no-files-found: warn
+          retention-days: 7
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
         if: always()
