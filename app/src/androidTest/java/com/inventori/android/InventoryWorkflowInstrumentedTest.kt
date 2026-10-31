@@ -35,7 +35,7 @@ class InventoryWorkflowInstrumentedTest {
         resetLocalState()
         var scenario = ActivityScenario.launch(MainActivity::class.java)
         val device = UiDevice.getInstance(instrumentation)
-        continueOnboarding(device)
+        continueOnboarding(scenario, device)
 
         tapId(device, "home_locations")
         createLocation(scenario, device, "Home", null, null)
@@ -130,7 +130,7 @@ class InventoryWorkflowInstrumentedTest {
         resetLocalState()
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         val device = UiDevice.getInstance(instrumentation)
-        continueOnboarding(device)
+        continueOnboarding(scenario, device)
         assertTrue(device.wait(Until.hasObject(By.res(packageName, "ai_multiple")), 5_000))
         tapId(device, "ai_multiple")
         assertTrue(device.wait(Until.hasObject(By.res(packageName, "ai_mock_sample")), 5_000))
@@ -242,9 +242,16 @@ class InventoryWorkflowInstrumentedTest {
         context.getSharedPreferences("inventori", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
-    private fun continueOnboarding(device: UiDevice) {
-        assertTrue(device.wait(Until.hasObject(By.res(packageName, "onboarding_continue")), 5_000))
-        tapId(device, "onboarding_continue")
+    private fun continueOnboarding(scenario: ActivityScenario<MainActivity>, device: UiDevice) {
+        // The Get started button can be below the fold on emulator displays.
+        // Click its real UI View on the main thread, rather than assuming UiAutomator
+        // exposes off-screen views in the accessibility tree.
+        scenario.onActivity { activity ->
+            val start = activity.findViewById<Button>(R.id.onboarding_continue)
+            assertNotNull("Onboarding button missing", start)
+            start.performClick()
+        }
+        device.waitForIdle()
     }
 
     private fun createLocation(
