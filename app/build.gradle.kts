@@ -1,6 +1,10 @@
 val inventoriAiBackendUrl = providers.gradleProperty("INVENTORI_AI_BACKEND_URL").orElse("https://inventori-api.barndai.com").get()
 val escapedInventoriAiBackendUrl = inventoriAiBackendUrl.replace("\\", "\\\\").replace("\"", "\\\"")
 
+val inventoriSigningPath = System.getenv("INVENTORI_SIGNING_KEYSTORE_PATH").orEmpty()
+val inventoriSigningPassword = System.getenv("INVENTORI_SIGNING_STORE_PASSWORD").orEmpty()
+val inventoriStableSigningConfigured = inventoriSigningPath.isNotBlank() && inventoriSigningPassword.isNotBlank()
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -18,6 +22,25 @@ android {
         versionName = "2.3.3"
         buildConfigField("String", "AI_BACKEND_URL", "\"" + escapedInventoriAiBackendUrl + "\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        if (inventoriStableSigningConfigured) {
+            create("inventoriStable") {
+                storeFile = file(inventoriSigningPath)
+                storePassword = inventoriSigningPassword
+                keyAlias = "inventori-release"
+                keyPassword = inventoriSigningPassword
+                storeType = "PKCS12"
+            }
+        }
+    }
+    buildTypes {
+        getByName("debug") {
+            if (inventoriStableSigningConfigured) {
+                signingConfig = signingConfigs.getByName("inventoriStable")
+            }
+        }
     }
 
     compileOptions {
