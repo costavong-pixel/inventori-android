@@ -13,6 +13,10 @@ jobs:
   build-debug-apk:
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      ORG_GRADLE_PROJECT_INVENTORI_AI_BACKEND_URL: https://inventori-api.barndai.com
+      INVENTORI_SIGNING_KEYSTORE_PATH: ${{ github.workspace }}/.github/secure/inventori-release.p12
+      INVENTORI_SIGNING_STORE_PASSWORD: ${{ secrets.INVENTORI_SIGNING_STORE_PASSWORD }}
     steps:
       - name: Check out source
         uses: actions/checkout@v7
@@ -27,6 +31,23 @@ jobs:
           java-version: "17"
           cache: gradle
 
+      - name: Require permanent Inventori signing key
+        env:
+          INVENTORI_SIGNING_KEYSTORE_BASE64: ${{ secrets.INVENTORI_SIGNING_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$INVENTORI_SIGNING_KEYSTORE_BASE64" || -z "$INVENTORI_SIGNING_STORE_PASSWORD" ]]; then
+            echo "::error::Stable signing secrets are required. Do NOT publish a rotating GitHub debug-signed APK."
+            exit 1
+          fi
+          install -d -m 700 .github/secure
+          umask 077
+          printf '%s' "$INVENTORI_SIGNING_KEYSTORE_BASE64" | base64 --decode > "$INVENTORI_SIGNING_KEYSTORE_PATH"
+          keytool -list -v -keystore "$INVENTORI_SIGNING_KEYSTORE_PATH" \
+            -storepass "$INVENTORI_SIGNING_STORE_PASSWORD" -alias inventori-release \
+            | grep -F 'SHA256: 31:41:FB:62:79:7C:BB:3F:24:10:E9:E3:61:2B:54:3F:41:E9:20:F7:2C:C4:7D:E2:CC:C7:2B:3A:73:9A:23:51'
+
       - name: Enable KVM for emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -34,6 +55,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Build debug APK
+        id: build
         run: |
           chmod +x ./gradlew
           ./gradlew assembleDebug testDebugUnitTest -PINVENTORI_AI_BACKEND_URL=https://inventori-api.barndai.com
@@ -60,9 +82,23 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Verify exact signing certificate on final APK
+        id: verify
+        if: ${{ always() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$APK"
+          APK_SIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APK_SIGNER"
+          "$APK_SIGNER" verify --print-certs "$APK" > "$RUNNER_TEMP/inventori-apk-signature.txt"
+          grep -Fi '3141fb62797cbb3f2410e9e3612b543f41e920f72cc47de2ccc72b3a739a2351' "$RUNNER_TEMP/inventori-apk-signature.txt"
+          echo "verified=true" >> "$GITHUB_OUTPUT"
+
       - name: Upload debug APK
         uses: actions/upload-artifact@v7
-        if: always()
+        if: ${{ success() && steps.verify.outputs.verified == 'true' }}
         with:
           name: inventori-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
